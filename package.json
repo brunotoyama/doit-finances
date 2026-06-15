@@ -1,0 +1,24 @@
+{
+  "name": "doit-finances",
+  "version": "1.0.0",
+  "description": "Dashboard financeiro para análise de planilhas Excel exportadas do DOit ERP",
+  "type": "module",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve . -p 3000 -o",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "dashboard",
+    "financeiro",
+    "excel",
+    "doit",
+    "erp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.0",
+    "vitest": "^0.31.4"
+  }
+}

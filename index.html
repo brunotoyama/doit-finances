@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOit Finance - Dashboard Financeiro</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- SheetJS/xlsx -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay" role="alert" aria-live="polite" aria-label="Indicador de carregamento">
+    <div class="loading-content">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <p id="loading-message" class="loading-message">Carregando...</p>
+      <div class="loading-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="loading-progress-fill" class="loading-progress-fill"></div>
+      </div>
+      <p id="loading-stage" class="loading-stage"></p>
+    </div>
+  </div>
+
+  <!-- App Container -->
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="sidebar" role="navigation" aria-label="Menu de navegação principal">
+      <div class="sidebar-header">
+        <h1 class="sidebar-logo">DOit Finance</h1>
+        <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Fechar menu" aria-expanded="true">
+          <span class="hamburger-icon" aria-hidden="true">&#9776;</span>
+        </button>
+      </div>
+      <nav>
+        <ul class="sidebar-menu" role="menubar">
+          <li role="none">
+            <a href="#section-dashboard" role="menuitem" class="sidebar-item active" data-section="section-dashboard" aria-current="page">
+              <span class="menu-icon" aria-hidden="true">&#128200;</span>
+              <span class="menu-label">Dashboard</span>
+            </a>
+          </li>
+          <li role="none">
+            <a href="#section-financeiro" role="menuitem" class="sidebar-item" data-section="section-financeiro">
+              <span class="menu-icon" aria-hidden="true">&#128176;</span>
+              <span class="menu-label">Financeiro</span>
+            </a>
+          </li>
+          <li role="none">
+            <a href="#section-projetos" role="menuitem" class="sidebar-item" data-section="section-projetos">
+              <span class="menu-icon" aria-hidden="true">&#128194;</span>
+              <span class="menu-label">Lançamentos Financeiros</span>
+            </a>
+          </li>
+          <li role="none">
+            <a href="#section-projeto-detalhe" role="menuitem" class="sidebar-item" data-section="section-projeto-detalhe">
+              <span class="menu-icon" aria-hidden="true">&#128188;</span>
+              <span class="menu-label">Projetos</span>
+            </a>
+          </li>
+          <li role="none">
+            <a href="#section-relatorios" role="menuitem" class="sidebar-item" data-section="section-relatorios">
+              <span class="menu-icon" aria-hidden="true">&#128196;</span>
+              <span class="menu-label">Relatórios</span>
+            </a>
+          </li>
+          <li role="none">
+            <a href="#section-insights" role="menuitem" class="sidebar-item" data-section="section-insights">
+              <span class="menu-icon" aria-hidden="true">&#128161;</span>
+              <span class="menu-label">Insights</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content" role="main" aria-label="Conteúdo principal do dashboard">
+      <!-- Upload Area -->
+      <section id="upload-area" class="upload-section" role="region" aria-label="Área de importação de arquivo Excel">
+        <div class="upload-dropzone" id="upload-dropzone" role="button" tabindex="0" aria-label="Arraste um arquivo Excel aqui ou clique para selecionar">
+          <div class="upload-icon" aria-hidden="true">&#128194;</div>
+          <h2 class="upload-title">Importar arquivo Excel</h2>
+          <p class="upload-description">Arraste e solte um arquivo .xlsx ou .xls exportado do DOit ERP, ou clique para selecionar</p>
+          <input type="file" id="file-input" accept=".xlsx,.xls" class="file-input" aria-label="Selecionar arquivo Excel" hidden>
+          <button class="upload-button" aria-label="Selecionar arquivo para importação">Selecionar Arquivo</button>
+        </div>
+        <div id="upload-error" class="upload-error" role="alert" aria-live="assertive" hidden></div>
+      </section>
+
+      <!-- Filter Bar -->
+      <section id="filter-bar" class="filter-bar" role="search" aria-label="Barra de filtros" hidden>
+        <div class="filter-group">
+          <label for="filter-periodo">Período:</label>
+          <input type="text" id="filter-periodo" class="filter-input" placeholder="Selecione o período" aria-label="Período" readonly style="cursor:pointer;min-width:180px;">
+          <div class="periodo-picker" id="periodo-picker" hidden>
+            <div class="periodo-picker-header">
+              <button class="periodo-nav" id="periodo-prev-month" aria-label="Mês anterior">&#8592;</button>
+              <span class="periodo-month-name" id="periodo-month-name" style="cursor:pointer;" title="Clique para selecionar mês"></span>
+              <span class="periodo-year-name" id="periodo-year-name" style="cursor:pointer;" title="Clique para selecionar ano"></span>
+              <button class="periodo-nav" id="periodo-next-month" aria-label="Próximo mês">&#8594;</button>
+            </div>
+            <div class="periodo-year-grid" id="periodo-year-grid" hidden></div>
+            <div class="periodo-month-grid" id="periodo-month-grid" hidden></div>
+            <div class="periodo-weekdays" id="periodo-weekdays">
+              <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
+            </div>
+            <div class="periodo-days" id="periodo-days"></div>
+            <div class="periodo-actions">
+              <button class="periodo-btn" id="periodo-clear">Limpar</button>
+              <button class="periodo-btn periodo-btn-primary" id="periodo-apply">Aplicar</button>
+            </div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label for="filter-projeto">Projeto:</label>
+          <select id="filter-projeto" class="filter-select" aria-label="Filtrar por projeto">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-cliente">Cliente:</label>
+          <select id="filter-cliente" class="filter-select" aria-label="Filtrar por cliente">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-nivel1">1ª Categoria:</label>
+          <select id="filter-nivel1" class="filter-select" aria-label="Filtrar por 1ª categoria">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group" id="filter-group-nivel2" hidden>
+          <label for="filter-nivel2">2ª Categoria:</label>
+          <select id="filter-nivel2" class="filter-select" aria-label="Filtrar por 2ª categoria">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group" id="filter-group-nivel3" hidden>
+          <label for="filter-nivel3">3ª Categoria:</label>
+          <select id="filter-nivel3" class="filter-select" aria-label="Filtrar por 3ª categoria">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-tipo">Tipo:</label>
+          <select id="filter-tipo" class="filter-select" aria-label="Filtrar por tipo de pagamento">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-centro-custo">Departamento:</label>
+          <select id="filter-centro-custo" class="filter-select" aria-label="Filtrar por departamento">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-conta">Conta:</label>
+          <select id="filter-conta" class="filter-select" aria-label="Filtrar por conta">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-status">Status:</label>
+          <select id="filter-status" class="filter-select" aria-label="Filtrar por status">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button id="btn-clear-filters" class="btn-clear-filters" aria-label="Limpar todos os filtros">Limpar Filtros</button>
+        </div>
+        <div id="filter-no-results" class="filter-no-results" role="status" aria-live="polite" hidden>
+          Nenhum resultado encontrado para os filtros selecionados.
+        </div>
+      </section>
+
+      <!-- Dashboard Section - KPI Cards -->
+      <section id="section-dashboard" class="dashboard-section" role="region" aria-label="Indicadores financeiros principais" hidden>
+        <h2 class="section-title">Dashboard</h2>
+        <div class="kpi-grid" role="list" aria-label="Cartões de indicadores financeiros">
+          <div class="kpi-card" role="listitem" aria-label="Total Recebido" data-kpi="totalRecebido" onclick="window._openKpiDetail&&window._openKpiDetail('totalRecebido')">
+            <div class="kpi-icon" aria-hidden="true">&#128181;</div>
+            <div class="kpi-content">
+              <h3 class="kpi-label">Total Recebido</h3>
+              <p class="kpi-value" id="kpi-total-recebido">R$ 0,00</p>
+              <span class="kpi-variation" id="kpi-var-total-recebido" aria-label="Variação mensal"></span>
+            </div>
+          </div>
+          <div class="kpi-card" role="listitem" aria-label="Total Pago" data-kpi="totalPago" onclick="window._openKpiDetail&&window._openKpiDetail('totalPago')">
+            <div class="kpi-icon" aria-hidden="true">&#128180;</div>
+            <div class="kpi-content">
+              <h3 class="kpi-label">Total Pago</h3>
+              <p class="kpi-value" id="kpi-total-pago">R$ 0,00</p>
+              <span class="kpi-variation" id="kpi-var-total-pago" aria-label="Variação mensal"></span>
+            </div>
+          </div>
+          <div class="kpi-card" role="listitem" aria-label="Saldo" data-kpi="saldo" onclick="window._openKpiDetail&&window._openKpiDetail('saldo')">
+            <div class="kpi-icon" aria-hidden="true">&#128176;</div>
+            <div class="kpi-content">
+              <h3 class="kpi-label">Saldo</h3>
+              <p class="kpi-value" id="kpi-saldo">R$ 0,00</p>
+              <span class="kpi-variation" id="kpi-var-saldo" aria-label="Variação mensal"></span>
+            </div>
+          </div>
+          <div class="kpi-card" role="listitem" aria-label="Recebimentos em Aberto" data-kpi="recebimentosAberto" onclick="window._openKpiDetail&&window._openKpiDetail('recebimentosAberto')">
+            <div class="kpi-icon" aria-hidden="true">&#128203;</div>
+            <div class="kpi-content">
+              <h3 class="kpi-label">Recebimentos em Aberto</h3>
+              <p class="kpi-value" id="kpi-recebimentos-aberto">R$ 0,00</p>
+              <span class="kpi-variation" id="kpi-var-recebimentos-aberto" aria-label="Variação mensal"></span>
+            </div>
+          </div>
+          <div class="kpi-card" role="listitem" aria-label="Pagamentos em Aberto" data-kpi="pagamentosAberto" onclick="window._openKpiDetail&&window._openKpiDetail('pagamentosAberto')">
+            <div class="kpi-icon" aria-hidden="true">&#128221;</div>
+            <div class="kpi-content">
+              <h3 class="kpi-label">Pagamentos em Aberto</h3>
+              <p class="kpi-value" id="kpi-pagamentos-aberto">R$ 0,00</p>
+              <span class="kpi-variation" id="kpi-var-pagamentos-aberto" aria-label="Variação mensal"></span>
+            </div>
+          </div>
+          <div class="kpi-card" role="listitem" aria-label="Fluxo do Mês" data-kpi="fluxoMes" onclick="window._openKpiDetail&&window._openKpiDetail('fluxoMes')">
+            <div class="kpi-icon" aria-hidden="true">&#128200;</div>
+            <div class="kpi-content">
+              <h3 class="kpi-label">Fluxo do Mês</h3>
+              <p class="kpi-value" id="kpi-fluxo-mes">R$ 0,00</p>
+              <span class="kpi-variation" id="kpi-var-fluxo-mes" aria-label="Variação mensal"></span>
+            </div>
+          </div>
+          <div class="kpi-card" role="listitem" aria-label="Ticket Médio" data-kpi="ticketMedio" onclick="window._openKpiDetail&&window._openKpiDetail('ticketMedio')">
+            <div class="kpi-icon" aria-hidden="true">&#127915;</div>
+            <div class="kpi-content">
+              <h3 class="kpi-label">Ticket Médio</h3>
+              <p class="kpi-value" id="kpi-ticket-medio">R$ 0,00</p>
+              <span class="kpi-variation" id="kpi-var-ticket-medio" aria-label="Variação mensal"></span>
+            </div>
+          </div>
+          <div class="kpi-card" role="listitem" aria-label="Quantidade de Lançamentos" data-kpi="quantidadeLancamentos" onclick="window._openKpiDetail&&window._openKpiDetail('quantidadeLancamentos')">
+            <div class="kpi-icon" aria-hidden="true">&#128202;</div>
+            <div class="kpi-content">
+              <h3 class="kpi-label">Quantidade de Lançamentos</h3>
+              <p class="kpi-value" id="kpi-quantidade-lancamentos">0</p>
+              <span class="kpi-variation" id="kpi-var-quantidade-lancamentos" aria-label="Variação mensal"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Financeiro Section - Charts -->
+      <section id="section-financeiro" class="dashboard-section" role="region" aria-label="Gráficos financeiros" hidden>
+        <h2 class="section-title">Financeiro</h2>
+        <div class="charts-grid">
+          <div class="chart-container" data-chart="fluxo-caixa" aria-label="Gráfico: Fluxo de caixa mensal">
+            <div class="chart-header">
+              <h3 class="chart-title">Fluxo de Caixa Mensal</h3>
+              <button class="btn-chart-export" aria-label="Exportar gráfico Fluxo de Caixa como imagem" data-chart-id="fluxo-caixa">&#128247;</button>
+            </div>
+            <canvas id="chart-fluxo-caixa" role="img" aria-label="Gráfico de barras do fluxo de caixa mensal"></canvas>
+            <p class="chart-empty" hidden>Nenhum dado disponível para os filtros selecionados.</p>
+          </div>
+          <div class="chart-container" data-chart="evolucao-mensal" aria-label="Gráfico: Evolução Financeira Mensal">
+            <div class="chart-header">
+              <h3 class="chart-title">Evolução Financeira Mensal</h3>
+              <button class="btn-chart-export" aria-label="Exportar gráfico Evolução Financeira Mensal como imagem" data-chart-id="evolucao-mensal">&#128247;</button>
+            </div>
+            <canvas id="chart-evolucao-mensal" role="img" aria-label="Gráfico de linha da evolução financeira mensal"></canvas>
+            <p class="chart-empty" hidden>Nenhum dado disponível para os filtros selecionados.</p>
+          </div>
+          <div class="chart-container" data-chart="receitas-chart" aria-label="Gráfico: Receitas por Categoria">
+            <div class="chart-header">
+              <h3 class="chart-title">Receitas por Categoria</h3>
+              <button class="btn-chart-expand" aria-label="Ver/fechar categorias detalhadas" data-expand="receitas">&#128269; Detalhar</button>
+              <button class="btn-chart-reset" aria-label="Limpar filtros do gráfico" title="Limpar filtros">&#8635;</button>
+              <button class="btn-chart-export" aria-label="Exportar gráfico Receitas" data-chart-id="receitas-chart">&#128247;</button>
+            </div>
+            <canvas id="chart-receitas-chart" role="img" aria-label="Gráfico de rosca de receitas por categoria"></canvas>
+            <div class="chart-expand-panel" id="expand-receitas" hidden>
+              <div class="chart-expand-section">
+                <h4 class="chart-expand-title">2ª Categoria (Receitas)</h4>
+                <canvas id="chart-receitas-nivel2"></canvas>
+              </div>
+              <div class="chart-expand-section">
+                <h4 class="chart-expand-title">3ª Categoria (Receitas)</h4>
+                <canvas id="chart-receitas-nivel3"></canvas>
+              </div>
+            </div>
+            <p class="chart-empty" hidden>Nenhum dado disponível para os filtros selecionados.</p>
+          </div>
+          <div class="chart-container" data-chart="despesas-chart" aria-label="Gráfico: Despesas por Categoria">
+            <div class="chart-header">
+              <h3 class="chart-title">Despesas por Categoria</h3>
+              <button class="btn-chart-expand" aria-label="Ver/fechar categorias detalhadas" data-expand="despesas">&#128269; Detalhar</button>
+              <button class="btn-chart-reset" aria-label="Limpar filtros do gráfico" title="Limpar filtros">&#8635;</button>
+              <button class="btn-chart-export" aria-label="Exportar gráfico Despesas" data-chart-id="despesas-chart">&#128247;</button>
+            </div>
+            <canvas id="chart-despesas-chart" role="img" aria-label="Gráfico de rosca de despesas por categoria"></canvas>
+            <div class="chart-expand-panel" id="expand-despesas" hidden>
+              <div class="chart-expand-section">
+                <h4 class="chart-expand-title">2ª Categoria (Despesas)</h4>
+                <canvas id="chart-despesas-nivel2"></canvas>
+              </div>
+              <div class="chart-expand-section">
+                <h4 class="chart-expand-title">3ª Categoria (Despesas)</h4>
+                <canvas id="chart-despesas-nivel3"></canvas>
+              </div>
+            </div>
+            <p class="chart-empty" hidden>Nenhum dado disponível para os filtros selecionados.</p>
+          </div>
+          <div class="chart-container" data-chart="recebimentos-proj" aria-label="Gráfico: Recebimentos por Projeto">
+            <div class="chart-header">
+              <h3 class="chart-title">Recebimentos por Projeto</h3>
+              <button class="btn-chart-reset" aria-label="Limpar filtros" title="Limpar filtros">&#8635;</button>
+              <button class="btn-chart-export" aria-label="Exportar gráfico Recebimentos por Projeto como imagem" data-chart-id="recebimentos-proj">&#128247;</button>
+            </div>
+            <canvas id="chart-recebimentos-proj" role="img" aria-label="Gráfico de barras horizontais de recebimentos por projeto"></canvas>
+            <p class="chart-empty" hidden>Nenhum dado disponível para os filtros selecionados.</p>
+          </div>
+          <div class="chart-container" data-chart="top-clientes" aria-label="Gráfico: Top Clientes">
+            <div class="chart-header">
+              <h3 class="chart-title">Top Clientes</h3>
+              <button class="btn-chart-reset" aria-label="Limpar filtros" title="Limpar filtros">&#8635;</button>
+              <button class="btn-chart-export" aria-label="Exportar gráfico Top Clientes como imagem" data-chart-id="top-clientes">&#128247;</button>
+            </div>
+            <canvas id="chart-top-clientes" role="img" aria-label="Gráfico de barras horizontais dos principais clientes"></canvas>
+            <p class="chart-empty" hidden>Nenhum dado disponível para os filtros selecionados.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dados Detalhados - Cards Grid -->
+      <section id="section-projetos" class="dashboard-section" role="region" aria-label="Dados detalhados" hidden>
+        <h2 class="section-title">Dados Detalhados</h2>
+
+        <!-- Tabs + Conta Filter -->
+        <div class="detail-tabs-row">
+          <div class="detail-tabs">
+            <button class="detail-tab active" data-tab="resumo">Resumo</button>
+            <button class="detail-tab" data-tab="todos">Todos os Lançamentos</button>
+          </div>
+          <div class="detail-filter">
+            <label for="detail-conta-filter">Conta:</label>
+            <select id="detail-conta-filter" class="chart-dropdown">
+              <option value="all">Todas</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tab: Resumo (cards grid) -->
+        <div class="detail-tab-content active" id="tab-resumo">
+        <div class="tables-grid">
+
+          <!-- Últimos Lançamentos (full width) -->
+          <div class="table-card table-card--full" data-table="ultimos-lancamentos">
+            <div class="table-card-top">
+              <h3 class="table-card-title">&#128197; Últimos Lançamentos</h3>
+              <input type="search" id="search-ultimos-lancamentos" class="table-search-input" placeholder="Buscar..." aria-label="Buscar lançamentos">
+            </div>
+            <div class="table-wrapper" tabindex="0">
+              <table id="table-ultimos-lancamentos"><thead><tr></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="table-pagination">
+              <button class="btn-page-prev" disabled>&#8592;</button>
+              <span class="page-info">Página 1 de 1</span>
+              <button class="btn-page-next" disabled>&#8594;</button>
+            </div>
+            <p class="table-empty" hidden>Nenhum registro encontrado.</p>
+          </div>
+
+          <!-- Projetos Mais Lucrativos -->
+          <div class="table-card" data-table="projetos-lucrativos">
+            <div class="table-card-top">
+              <h3 class="table-card-title">&#127942; Projetos Mais Lucrativos</h3>
+              <input type="search" id="search-projetos-lucrativos" class="table-search-input" placeholder="Buscar..." aria-label="Buscar projetos">
+            </div>
+            <div class="table-wrapper" tabindex="0">
+              <table id="table-projetos-lucrativos"><thead><tr></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="table-pagination">
+              <button class="btn-page-prev" disabled>&#8592;</button>
+              <span class="page-info">Página 1 de 1</span>
+              <button class="btn-page-next" disabled>&#8594;</button>
+            </div>
+            <p class="table-empty" hidden>Nenhum registro encontrado.</p>
+          </div>
+
+          <!-- Clientes com Maior Faturamento -->
+          <div class="table-card" data-table="clientes-faturamento">
+            <div class="table-card-top">
+              <h3 class="table-card-title">&#128100; Top Clientes</h3>
+              <input type="search" id="search-clientes-faturamento" class="table-search-input" placeholder="Buscar..." aria-label="Buscar clientes">
+            </div>
+            <div class="table-wrapper" tabindex="0">
+              <table id="table-clientes-faturamento"><thead><tr></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="table-pagination">
+              <button class="btn-page-prev" disabled>&#8592;</button>
+              <span class="page-info">Página 1 de 1</span>
+              <button class="btn-page-next" disabled>&#8594;</button>
+            </div>
+            <p class="table-empty" hidden>Nenhum registro encontrado.</p>
+          </div>
+
+          <!-- Maiores Receitas -->
+          <div class="table-card" data-table="maiores-receitas">
+            <div class="table-card-top">
+              <h3 class="table-card-title">&#128200; Maiores Receitas</h3>
+              <input type="search" id="search-maiores-receitas" class="table-search-input" placeholder="Buscar..." aria-label="Buscar receitas">
+            </div>
+            <div class="table-wrapper" tabindex="0">
+              <table id="table-maiores-receitas"><thead><tr></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="table-pagination">
+              <button class="btn-page-prev" disabled>&#8592;</button>
+              <span class="page-info">Página 1 de 1</span>
+              <button class="btn-page-next" disabled>&#8594;</button>
+            </div>
+            <p class="table-empty" hidden>Nenhum registro encontrado.</p>
+          </div>
+
+          <!-- Maiores Despesas -->
+          <div class="table-card" data-table="maiores-despesas">
+            <div class="table-card-top">
+              <h3 class="table-card-title">&#128201; Maiores Despesas</h3>
+              <input type="search" id="search-maiores-despesas" class="table-search-input" placeholder="Buscar..." aria-label="Buscar despesas">
+            </div>
+            <div class="table-wrapper" tabindex="0">
+              <table id="table-maiores-despesas"><thead><tr></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="table-pagination">
+              <button class="btn-page-prev" disabled>&#8592;</button>
+              <span class="page-info">Página 1 de 1</span>
+              <button class="btn-page-next" disabled>&#8594;</button>
+            </div>
+            <p class="table-empty" hidden>Nenhum registro encontrado.</p>
+          </div>
+
+        </div>
+        </div><!-- end tab-resumo -->
+
+        <!-- Tab: Todos os Lançamentos -->
+        <div class="detail-tab-content" id="tab-todos">
+          <div class="table-card table-card--full table-card--all" data-table="todos-lancamentos">
+            <div class="table-card-top">
+              <h3 class="table-card-title">&#128203; Todos os Lançamentos</h3>
+              <input type="search" id="search-todos-lancamentos" class="table-search-input" placeholder="Buscar em todos..." aria-label="Buscar em todos os lançamentos">
+            </div>
+            <div class="table-wrapper" tabindex="0">
+              <table id="table-todos-lancamentos"><thead><tr></tr></thead><tbody></tbody></table>
+            </div>
+            <div class="table-pagination">
+              <button class="btn-page-prev" disabled>&#8592;</button>
+              <span class="page-info">Página 1 de 1</span>
+              <button class="btn-page-next" disabled>&#8594;</button>
+            </div>
+            <p class="table-empty" hidden>Nenhum registro encontrado.</p>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Projetos Detalhe Section -->
+      <section id="section-projeto-detalhe" class="dashboard-section" role="region" aria-label="Detalhamento por projeto" hidden>
+        <h2 class="section-title">Projetos</h2>
+
+        <!-- Project Selector -->
+        <div class="projeto-detalhe-header">
+          <div class="filter-group">
+            <label for="projeto-detalhe-select">Selecionar Projeto:</label>
+            <select id="projeto-detalhe-select" class="filter-select" aria-label="Selecionar projeto para detalhamento">
+              <option value="">-- Selecione um projeto --</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="projeto-detalhe-status">Status:</label>
+            <select id="projeto-detalhe-status" class="filter-select" aria-label="Filtrar por status">
+              <option value="">Todos</option>
+              <option value="Pago">Conciliado (Pago)</option>
+              <option value="Pendente">Em Aberto (Pendente)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Project Summary KPIs -->
+        <div class="projeto-detalhe-kpis" id="projeto-detalhe-kpis" hidden>
+          <div class="projeto-kpi-card projeto-kpi-previsto">
+            <span class="projeto-kpi-label">Previsto</span>
+            <span class="projeto-kpi-value" id="projeto-kpi-previsto">R$ 0,00</span>
+          </div>
+          <div class="projeto-kpi-card projeto-kpi-realizado">
+            <span class="projeto-kpi-label">Realizado</span>
+            <span class="projeto-kpi-value" id="projeto-kpi-realizado">R$ 0,00</span>
+          </div>
+          <div class="projeto-kpi-card projeto-kpi-saldo">
+            <span class="projeto-kpi-label">Saldo</span>
+            <span class="projeto-kpi-value" id="projeto-kpi-saldo">R$ 0,00</span>
+          </div>
+          <div class="projeto-kpi-card projeto-kpi-pendente">
+            <span class="projeto-kpi-label">Pendente</span>
+            <span class="projeto-kpi-value" id="projeto-kpi-pendente">R$ 0,00</span>
+          </div>
+        </div>
+
+        <!-- Tabs: Previsto X Realizado / Todos os Lançamentos -->
+        <div class="detail-tabs" id="projeto-detalhe-tabs" hidden>
+          <button class="detail-tab active" data-tab="projeto-previsto-realizado">Previsto X Realizado</button>
+          <button class="detail-tab" data-tab="projeto-lancamentos">Todos os Lançamentos</button>
+        </div>
+
+        <!-- Tab: Previsto X Realizado -->
+        <div class="detail-tab-content active" id="tab-projeto-previsto-realizado" hidden>
+          <div class="projeto-pr-tree" id="projeto-pr-tree"></div>
+        </div>
+
+        <!-- Tab: Todos os Lançamentos do Projeto -->
+        <div class="detail-tab-content" id="tab-projeto-lancamentos" hidden>
+          <div class="table-wrapper" tabindex="0" style="max-height:500px;overflow-y:auto;">
+            <table id="table-projeto-lancamentos">
+              <thead><tr>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th>Categoria</th>
+                <th>Status</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="table-pagination" id="projeto-lancamentos-pagination">
+            <button class="btn-page-prev" disabled>&#8592;</button>
+            <span class="page-info">Página 1 de 1</span>
+            <button class="btn-page-next" disabled>&#8594;</button>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="projeto-detalhe-empty" class="insight-placeholder" style="text-align:center;padding:40px;">
+          Selecione um projeto para visualizar os lançamentos.
+        </div>
+      </section>
+
+      <!-- Hidden sections for lazy rendering compatibility -->
+      <section id="section-recebimentos" class="dashboard-section" hidden></section>
+      <section id="section-pagamentos" class="dashboard-section" hidden></section>
+      <section id="section-fluxo-caixa" class="dashboard-section" hidden></section>
+
+      <!-- Relatórios Section - Insights -->
+      <section id="section-relatorios" class="dashboard-section" role="region" aria-label="Seção de relatórios e insights" hidden>
+        <h2 class="section-title">Relatórios</h2>
+
+        <!-- Export Actions -->
+        <div class="export-actions" role="toolbar" aria-label="Ações de exportação">
+          <button id="btn-export-pdf" class="btn-export" aria-label="Exportar dashboard como PDF">
+            <span aria-hidden="true">&#128196;</span> Exportar PDF
+          </button>
+          <button id="btn-fullscreen" class="btn-export" aria-label="Ativar modo tela cheia">
+            <span aria-hidden="true">&#9974;</span> Tela Cheia
+          </button>
+        </div>
+
+        <!-- Plano de Contas Detalhado -->
+        <div class="report-section" id="report-plano-contas">
+          <div class="report-header">
+            <h3 class="report-title">Plano de Contas Detalhado</h3>
+            <div class="report-actions">
+              <select id="report-conta-filter" class="chart-dropdown">
+                <option value="all">Todas as Contas</option>
+              </select>
+              <button id="btn-print-report" class="btn-export">&#128424; Imprimir</button>
+            </div>
+          </div>
+          <div class="report-totals">
+            <div class="report-total-box report-total-credit">
+              <span class="report-total-label">Crédito</span>
+              <span class="report-total-value" id="report-total-credit">R$ 0,00</span>
+            </div>
+            <div class="report-total-box report-total-debit">
+              <span class="report-total-label">Débito</span>
+              <span class="report-total-value" id="report-total-debit">R$ 0,00</span>
+            </div>
+            <div class="report-total-box report-total-net">
+              <span class="report-total-label">Saldo</span>
+              <span class="report-total-value" id="report-total-net">R$ 0,00</span>
+            </div>
+          </div>
+
+          <!-- Report Charts removed -->
+
+          <div class="report-tree" id="report-tree"></div>
+        </div>
+
+        <!-- Insights Section moved to its own section below -->
+      </section>
+
+      <!-- Insights Section (standalone) -->
+      <section id="section-insights" class="dashboard-section" role="region" aria-label="Insights financeiros automáticos" hidden>
+        <h2 class="section-title">Insights</h2>
+
+        <div id="insights-section" class="insights-section" role="region" aria-label="Insights financeiros automáticos">
+          <h3 class="insights-title">Insights Automáticos</h3>
+          <p class="insights-description">Análise inteligente dos seus dados financeiros. Identifica tendências, alertas e oportunidades automaticamente com base nos lançamentos importados.</p>
+
+          <div class="insights-grid">
+            <div class="insight-card" id="insight-alerts" aria-label="Alertas financeiros">
+              <h4 class="insight-card-title">&#9888; Alertas</h4>
+              <p class="insight-card-desc">Pagamentos vencidos e pendências que precisam de atenção imediata.</p>
+              <div class="insight-content" id="insight-alerts-content">
+                <p class="insight-placeholder">Importe um arquivo para visualizar alertas.</p>
+              </div>
+            </div>
+
+            <div class="insight-card" id="insight-trends" aria-label="Tendências financeiras">
+              <h4 class="insight-card-title">&#128200; Tendências</h4>
+              <p class="insight-card-desc">Direção financeira dos últimos 3 meses: se está subindo, caindo ou estável.</p>
+              <div class="insight-content" id="insight-trends-content">
+                <p class="insight-placeholder">Importe um arquivo para visualizar tendências.</p>
+              </div>
+            </div>
+
+            <div class="insight-card" id="insight-forecast" aria-label="Previsão financeira">
+              <h4 class="insight-card-title">&#128302; Previsão</h4>
+              <p class="insight-card-desc">Projeção financeira para os próximos 3 meses baseada no histórico de lançamentos.</p>
+              <div class="insight-content" id="insight-forecast-content">
+                <p class="insight-placeholder">Importe um arquivo para visualizar previsões.</p>
+              </div>
+            </div>
+
+            <div class="insight-card" id="insight-rankings" aria-label="Rankings financeiros">
+              <h4 class="insight-card-title">&#127942; Rankings Top 10</h4>
+              <p class="insight-card-desc">Os projetos, clientes e categorias com maior movimentação financeira.</p>
+              <div class="insight-content" id="insight-rankings-content">
+                <select id="ranking-selector" class="chart-dropdown" style="width:100%;margin-bottom:12px;">
+                  <option value="projetos">Top 10 Projetos</option>
+                  <option value="clientes">Top 10 Clientes</option>
+                  <option value="categorias">Top 10 Categorias</option>
+                </select>
+                <div class="ranking-group" id="ranking-group-projetos">
+                  <ol id="ranking-projetos" class="ranking-list"></ol>
+                </div>
+                <div class="ranking-group" id="ranking-group-clientes" hidden>
+                  <ol id="ranking-clientes" class="ranking-list"></ol>
+                </div>
+                <div class="ranking-group" id="ranking-group-categorias" hidden>
+                  <ol id="ranking-categorias" class="ranking-list"></ol>
+                </div>
+              </div>
+            </div>
+
+            <div class="insight-card" id="insight-monthly" aria-label="Variações mensais">
+              <h4 class="insight-card-title">&#128197; Variações Mensais</h4>
+              <p class="insight-card-desc">Comparativo mês a mês mostrando aumentos e quedas de receitas e despesas.</p>
+              <div class="insight-content" id="insight-monthly-content">
+                <p class="insight-placeholder">Importe um arquivo para visualizar variações mensais.</p>
+              </div>
+            </div>
+
+            <div class="insight-card" id="insight-critical" aria-label="Condições críticas">
+              <h4 class="insight-card-title">&#128680; Condições Críticas</h4>
+              <p class="insight-card-desc">Situações que exigem ação: queda de receita acima de 20% ou aumento de despesas acima de 30%.</p>
+              <div class="insight-content" id="insight-critical-content">
+                <p class="insight-placeholder">Importe um arquivo para visualizar condições críticas.</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="insights-insufficient-data" class="insights-insufficient" role="status" hidden>
+            Dados insuficientes para análise de tendências e previsões. São necessários pelo menos 3 meses de histórico.
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Record Detail Modal -->
+  <div id="record-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" hidden>
+    <div class="modal-content modal-content--record">
+      <div class="modal-header-row">
+        <h2 class="record-modal-title">Ficha do Lançamento</h2>
+        <button id="btn-close-record" class="modal-close-btn" aria-label="Fechar">&times;</button>
+      </div>
+      <div id="record-detail-body" class="record-detail-body"></div>
+    </div>
+  </div>
+
+  <!-- KPI Detail Modal -->
+  <div id="kpi-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" tabindex="0" onkeydown="if(event.key==='Escape'){this.setAttribute('hidden','');document.body.style.overflow='';}" hidden>
+    <div class="modal-content modal-content--wide">
+      <div class="modal-header-row">
+        <h2 id="kpi-detail-title">Detalhes</h2>
+        <button id="btn-close-kpi-detail" class="modal-close-btn" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="kpi-detail-summary" id="kpi-detail-summary"></div>
+      <div class="table-wrapper" tabindex="0" style="max-height:400px;overflow-y:auto;">
+        <table id="table-kpi-detail">
+          <thead><tr>
+            <th>Data</th>
+            <th>Projeto</th>
+            <th>Cliente</th>
+            <th>Descrição</th>
+            <th>Status</th>
+            <th>Valor</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="table-pagination" id="kpi-detail-pagination">
+        <button class="btn-page-prev" disabled>&#8592;</button>
+        <span class="page-info">Página 1 de 1</span>
+        <button class="btn-page-next" disabled>&#8594;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts Full List Modal -->
+  <div id="alerts-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="alerts-modal-title" hidden>
+    <div class="modal-content modal-content--wide">
+      <div class="modal-header-row">
+        <h2 id="alerts-modal-title">Lançamentos Pendentes</h2>
+        <button id="btn-close-alerts-modal" class="modal-close-btn" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="alerts-modal-filters">
+        <div class="filter-group" style="position:relative;">
+          <label for="alerts-filter-periodo">Período:</label>
+          <input type="text" id="alerts-filter-periodo" class="filter-input" placeholder="Selecione" readonly style="cursor:pointer;min-width:160px;">
+          <div class="periodo-picker" id="alerts-periodo-picker" hidden>
+            <div class="periodo-picker-header">
+              <button class="periodo-nav" id="alerts-periodo-prev-month">&#8592;</button>
+              <span class="periodo-month-name" id="alerts-periodo-month-name" style="cursor:pointer;" title="Clique para selecionar mês"></span>
+              <span class="periodo-year-name" id="alerts-periodo-year-name" style="cursor:pointer;" title="Clique para selecionar ano"></span>
+              <button class="periodo-nav" id="alerts-periodo-next-month">&#8594;</button>
+            </div>
+            <div class="periodo-year-grid" id="alerts-periodo-year-grid" hidden></div>
+            <div class="periodo-month-grid" id="alerts-periodo-month-grid" hidden></div>
+            <div class="periodo-weekdays" id="alerts-periodo-weekdays">
+              <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
+            </div>
+            <div class="periodo-days" id="alerts-periodo-days"></div>
+            <div class="periodo-actions">
+              <button class="periodo-btn" id="alerts-periodo-clear">Limpar</button>
+              <button class="periodo-btn periodo-btn-primary" id="alerts-periodo-apply">Aplicar</button>
+            </div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label for="alerts-filter-projeto">Projeto:</label>
+          <select id="alerts-filter-projeto" class="filter-select">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="alerts-filter-cliente">Cliente:</label>
+          <select id="alerts-filter-cliente" class="filter-select">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="alerts-filter-tipo">Tipo:</label>
+          <select id="alerts-filter-tipo" class="filter-select">
+            <option value="">Todos</option>
+            <option value="receita">Receita</option>
+            <option value="despesa">Despesa</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="alerts-filter-conta">Conta:</label>
+          <select id="alerts-filter-conta" class="filter-select">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <button id="btn-alerts-clear-filters" class="btn-clear-filters">Limpar</button>
+      </div>
+      <div class="alerts-modal-summary" id="alerts-modal-summary"></div>
+      <div class="table-wrapper" tabindex="0" style="max-height:400px;overflow-y:auto;">
+        <table id="table-alerts-modal">
+          <thead><tr>
+            <th>Data</th>
+            <th>Projeto</th>
+            <th>Cliente</th>
+            <th>Descrição</th>
+            <th>Tipo</th>
+            <th>Valor</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="table-pagination" id="alerts-modal-pagination">
+        <button class="btn-page-prev" disabled>&#8592;</button>
+        <span class="page-info">Página 1 de 1</span>
+        <button class="btn-page-next" disabled>&#8594;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Categorias Detalhadas Modal -->
+  <div id="categorias-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="categorias-modal-title" hidden>
+    <div class="modal-content modal-content--wide">
+      <div class="modal-header-row">
+        <h2 id="categorias-modal-title">Detalhamento por Categorias</h2>
+        <button id="btn-close-categorias" class="modal-close-btn" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="categorias-charts">
+        <div class="categorias-chart-block">
+          <div class="chart-header">
+            <h3 class="chart-title">2ª Categoria</h3>
+            <select id="nivel2-filter" class="chart-dropdown" aria-label="Filtrar por tipo">
+              <option value="all">Todos</option>
+              <option value="receita">Receitas</option>
+              <option value="despesa">Despesas</option>
+            </select>
+          </div>
+          <canvas id="chart-nivel2-chart" role="img" aria-label="Gráfico 2ª Categoria"></canvas>
+        </div>
+        <div class="categorias-chart-block">
+          <div class="chart-header">
+            <h3 class="chart-title">3ª Categoria</h3>
+            <select id="nivel3-filter" class="chart-dropdown" aria-label="Filtrar por tipo">
+              <option value="all">Todos</option>
+              <option value="receita">Receitas</option>
+              <option value="despesa">Despesas</option>
+            </select>
+          </div>
+          <canvas id="chart-nivel3-chart" role="img" aria-label="Gráfico 3ª Categoria"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual Column Mapping Modal -->
+  <div id="column-mapping-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="mapping-modal-title" hidden>
+    <div class="modal-content">
+      <h2 id="mapping-modal-title">Mapeamento Manual de Colunas</h2>
+      <p class="modal-description">As colunas obrigatórias (Valor, Tipo, Data) não foram identificadas automaticamente. Associe as colunas do arquivo aos campos esperados:</p>
+      <div id="mapping-fields" class="mapping-fields"></div>
+      <div class="modal-actions">
+        <button id="btn-mapping-confirm" class="btn-primary" aria-label="Confirmar mapeamento">Confirmar</button>
+        <button id="btn-mapping-cancel" class="btn-secondary" aria-label="Cancelar mapeamento">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Dialog for Large Files -->
+  <div id="large-file-dialog" class="modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="large-file-title" hidden>
+    <div class="modal-content">
+      <h2 id="large-file-title">Arquivo Grande Detectado</h2>
+      <p id="large-file-message" class="modal-description"></p>
+      <div class="modal-actions">
+        <button id="btn-large-file-confirm" class="btn-primary" aria-label="Confirmar processamento">Continuar</button>
+        <button id="btn-large-file-cancel" class="btn-secondary" aria-label="Cancelar processamento">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script -->
+  <script>
+    // Define KPI detail opener BEFORE script.js loads
+    window._openKpiDetail = function(key) {
+      var modal = document.getElementById('kpi-detail-modal');
+      if (!modal) return;
+      modal.removeAttribute('hidden');
+      modal.focus();
+      // Set title and description
+      var info = {
+        totalRecebido:        { title: 'Total Recebido',         desc: 'Soma de todas as receitas com status Pago (conciliadas).' },
+        totalPago:            { title: 'Total Pago',             desc: 'Soma de todas as despesas com status Pago (conciliadas).' },
+        saldo:                { title: 'Saldo',                  desc: 'Diferença entre receitas e despesas conciliadas (Pago).' },
+        recebimentosAberto:   { title: 'Recebimentos em Aberto', desc: 'Receitas com status Pendente que ainda não foram conciliadas.' },
+        pagamentosAberto:     { title: 'Pagamentos em Aberto',   desc: 'Despesas com status Pendente que ainda não foram pagas.' },
+        fluxoMes:             { title: 'Fluxo do Mês',           desc: 'Todos os lançamentos do mês atual (receitas - despesas).' },
+        ticketMedio:          { title: 'Ticket Médio',           desc: 'Valor médio por lançamento considerando todos os registros.' },
+        quantidadeLancamentos: { title: 'Quantidade de Lançamentos', desc: 'Total de lançamentos financeiros importados.' }
+      };
+      var data = info[key] || { title: key, desc: '' };
+      var titleEl = document.getElementById('kpi-detail-title');
+      if (titleEl) titleEl.textContent = data.title;
+      var summaryEl = document.getElementById('kpi-detail-summary');
+      if (summaryEl && data.desc) summaryEl.innerHTML = '<p style="margin:0;color:#64748b;font-size:13px;">' + data.desc + '</p>';
+      document.body.style.overflow = 'hidden';
+      try {
+        if (window.KPIDetailModal && window.KPIDetailModal._renderFromKey) {
+          window.KPIDetailModal._renderFromKey(key);
+        }
+      } catch(err) { console.warn('KPI render error:', err); }
+    };
+    // Close all modals function
+    window._closeAllModals = function() {
+      var modals = document.querySelectorAll('.modal-overlay');
+      for (var i = 0; i < modals.length; i++) {
+        modals[i].setAttribute('hidden', '');
+      }
+      document.body.style.overflow = '';
+    };
+    // Close handlers
+    (function() {
+      var modal = document.getElementById('kpi-detail-modal');
+      function closeKpi() {
+        if (modal) modal.setAttribute('hidden', '');
+        document.body.style.overflow = '';
+      }
+      var closeBtn = document.getElementById('btn-close-kpi-detail');
+      if (closeBtn) closeBtn.onclick = closeKpi;
+      if (modal) modal.onclick = function(e) { if (e.target === modal) closeKpi(); };
+      
+      // ESC key closes any open modal
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' || e.keyCode === 27) {
+          var modals = document.querySelectorAll('.modal-overlay');
+          var closed = false;
+          for (var i = modals.length - 1; i >= 0; i--) {
+            if (!modals[i].hasAttribute('hidden')) {
+              modals[i].setAttribute('hidden', '');
+              closed = true;
+              break;
+            }
+          }
+          if (closed) {
+            document.body.style.overflow = '';
+            e.preventDefault();
+          }
+        }
+      });
+    })();
+  </script>
+  <script src="script.js"></script>
+  <script>
+    // ESC handler - multiple approaches for maximum compatibility
+    function _escCloseModals() {
+      var kpiModal = document.getElementById('kpi-detail-modal');
+      if (kpiModal && !kpiModal.hasAttribute('hidden')) {
+        kpiModal.setAttribute('hidden', '');
+        document.body.style.overflow = '';
+        return true;
+      }
+      var recModal = document.getElementById('record-detail-modal');
+      if (recModal && !recModal.hasAttribute('hidden')) {
+        recModal.setAttribute('hidden', '');
+        document.body.style.overflow = '';
+        return true;
+      }
+      var alertsModal = document.getElementById('alerts-modal');
+      if (alertsModal && !alertsModal.hasAttribute('hidden')) {
+        alertsModal.setAttribute('hidden', '');
+        document.body.style.overflow = '';
+        return true;
+      }
+      return false;
+    }
+    // Approach 1: keyup on window (capture phase)
+    window.addEventListener('keyup', function(e) {
+      if (e.key === 'Escape' || e.keyCode === 27) _escCloseModals();
+    }, true);
+    // Approach 2: keydown on document
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' || e.keyCode === 27) _escCloseModals();
+    }, true);
+    // Approach 3: onkeydown on body
+    document.body.onkeydown = function(e) {
+      if (e.key === 'Escape' || e.keyCode === 27) _escCloseModals();
+    };
+  </script>
+</body>
+</html>
