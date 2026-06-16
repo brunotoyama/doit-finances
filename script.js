@@ -2277,14 +2277,12 @@ EventBus.on('chart:clicked', (payload) => {
       title = 'Lançamentos: ' + payload.filter.cliente;
     }
     
-    if (filtered.length > 0 && window.KPIDetailModal) {
+    if (window.KPIDetailModal) {
       KPIDetailModal._kpiKey = 'custom';
       KPIDetailModal._page = 1;
-      KPIDetailModal._records = filtered.sort((a, b) => {
-        const da = a.data instanceof Date ? a.data : new Date(a.data);
-        const db = b.data instanceof Date ? b.data : new Date(b.data);
-        return db - da;
-      });
+      KPIDetailModal._sortColumn = 'data';
+      KPIDetailModal._sortDirection = 'desc';
+      KPIDetailModal._records = filtered;
       const titleEl = document.getElementById('kpi-detail-title');
       if (titleEl) titleEl.textContent = title;
       KPIDetailModal._renderSummary();
@@ -6286,14 +6284,12 @@ const RecordDetail = {
           }
           title = 'Lançamentos: ' + name;
         }
-        if (filtered && filtered.length > 0 && window.KPIDetailModal) {
+        if (filtered && window.KPIDetailModal) {
           KPIDetailModal._kpiKey = 'custom';
           KPIDetailModal._page = 1;
-          KPIDetailModal._records = filtered.sort((a, b) => {
-            const da = a.data instanceof Date ? a.data : new Date(a.data);
-            const db = b.data instanceof Date ? b.data : new Date(b.data);
-            return db - da;
-          });
+          KPIDetailModal._sortColumn = 'data';
+          KPIDetailModal._sortDirection = 'desc';
+          KPIDetailModal._records = filtered;
           const titleEl = document.getElementById('kpi-detail-title');
           if (titleEl) titleEl.textContent = title;
           KPIDetailModal._renderSummary();
@@ -6341,6 +6337,8 @@ const KPIDetailModal = {
   _pageSize: 20,
   _records: [],
   _kpiKey: '',
+  _sortColumn: 'data',
+  _sortDirection: 'desc',
 
   _kpiConfig: {
     totalRecebido:        { title: 'Total Recebido',         filter: r => r.tipo === 'receita' && r.status === 'Pago' },
@@ -6359,16 +6357,13 @@ const KPIDetailModal = {
 
     this._kpiKey = kpiKey;
     this._page = 1;
+    this._sortColumn = 'data';
+    this._sortDirection = 'desc';
 
     // For quantidadeLancamentos, include all records (even excluded)
     const includeAll = (kpiKey === 'quantidadeLancamentos' || kpiKey === 'ticketMedio');
     const data = includeAll ? DataLayer.getData(true) : (UIController._currentData || DataLayer.getData());
     this._records = data.filter(config.filter);
-    this._records.sort((a, b) => {
-      const da = a.data instanceof Date ? a.data : new Date(a.data);
-      const db = b.data instanceof Date ? b.data : new Date(b.data);
-      return db - da;
-    });
 
     // Title
     const titleEl = document.getElementById('kpi-detail-title');
@@ -6393,15 +6388,12 @@ const KPIDetailModal = {
 
     this._kpiKey = kpiKey;
     this._page = 1;
+    this._sortColumn = 'data';
+    this._sortDirection = 'desc';
 
     const includeAll = (kpiKey === 'quantidadeLancamentos' || kpiKey === 'ticketMedio');
     const data = (typeof DataLayer !== 'undefined') ? DataLayer.getData(includeAll) : [];
     this._records = data.filter(config.filter);
-    this._records.sort((a, b) => {
-      const da = a.data instanceof Date ? a.data : new Date(a.data);
-      const db = b.data instanceof Date ? b.data : new Date(b.data);
-      return db - da;
-    });
 
     const titleEl = document.getElementById('kpi-detail-title');
     if (titleEl) titleEl.textContent = config.title;
@@ -6449,19 +6441,105 @@ const KPIDetailModal = {
     summaryEl.innerHTML = html;
   },
 
+  _sortRecords(records, column, direction) {
+    const dir = direction === 'desc' ? -1 : 1;
+    return [...records].sort((a, b) => {
+      const valA = a[column];
+      const valB = b[column];
+
+      // Nulls/empties always last
+      const aEmpty = (valA == null || valA === '');
+      const bEmpty = (valB == null || valB === '');
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+
+      // Numeric column
+      if (column === 'valor') {
+        return (Number(valA) - Number(valB)) * dir;
+      }
+      // Date column
+      if (column === 'data') {
+        const dateA = valA instanceof Date ? valA.getTime() : new Date(valA).getTime();
+        const dateB = valB instanceof Date ? valB.getTime() : new Date(valB).getTime();
+        return (dateA - dateB) * dir;
+      }
+      // Text columns - locale-aware
+      return String(valA).localeCompare(String(valB), 'pt-BR') * dir;
+    });
+  },
+
+  _columns: [
+    { key: 'data', label: 'Data' },
+    { key: 'projeto', label: 'Projeto' },
+    { key: 'cliente', label: 'Cliente' },
+    { key: 'descricao', label: 'Descrição' },
+    { key: 'status', label: 'Status' },
+    { key: 'valor', label: 'Valor' }
+  ],
+
+  _handleHeaderClick(columnKey) {
+    if (this._sortColumn === columnKey) {
+      this._sortDirection = this._sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this._sortColumn = columnKey;
+      this._sortDirection = 'asc';
+    }
+    this._page = 1;
+    this._renderTable();
+  },
+
+  _renderTableHeader() {
+    const thead = document.querySelector('#table-kpi-detail thead tr');
+    if (!thead) return;
+    thead.innerHTML = '';
+    for (const col of this._columns) {
+      const th = document.createElement('th');
+      th.setAttribute('data-column', col.key);
+      th.setAttribute('role', 'columnheader');
+      th.style.cursor = 'pointer';
+      th.setAttribute('tabindex', '0');
+
+      const label = document.createElement('span');
+      label.textContent = col.label;
+      th.appendChild(label);
+
+      const indicator = document.createElement('span');
+      indicator.className = 'sort-indicator';
+      indicator.setAttribute('aria-hidden', 'true');
+      if (this._sortColumn === col.key) {
+        indicator.textContent = this._sortDirection === 'asc' ? ' ↑' : ' ↓';
+        th.setAttribute('aria-sort', this._sortDirection === 'asc' ? 'ascending' : 'descending');
+      }
+      th.appendChild(indicator);
+
+      th.addEventListener('click', () => this._handleHeaderClick(col.key));
+      thead.appendChild(th);
+    }
+  },
+
   _renderTable() {
     const tbody = document.querySelector('#table-kpi-detail tbody');
     if (!tbody) return;
 
-    const totalPages = Math.max(1, Math.ceil(this._records.length / this._pageSize));
+    // Update header sort indicators
+    this._renderTableHeader();
+
+    // Sort records before pagination
+    const sorted = this._sortRecords(this._records, this._sortColumn, this._sortDirection);
+
+    const totalPages = Math.max(1, Math.ceil(sorted.length / this._pageSize));
     if (this._page > totalPages) this._page = totalPages;
 
     const start = (this._page - 1) * this._pageSize;
-    const end = Math.min(start + this._pageSize, this._records.length);
-    const pageRecords = this._records.slice(start, end);
+    const end = Math.min(start + this._pageSize, sorted.length);
+    const pageRecords = sorted.slice(start, end);
 
     if (pageRecords.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Nenhum lançamento.</td></tr>';
+      const emptyMsg = this._kpiKey === 'custom' && this._records.length === 0
+        ? 'Nenhum lançamento encontrado para o elemento selecionado.'
+        : 'Nenhum lançamento.';
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">${emptyMsg}</td></tr>`;
     } else {
       let html = '';
       for (const record of pageRecords) {
@@ -7589,6 +7667,58 @@ if (document.readyState === 'loading') {
 }
 
 // ============================================================
+// SECTION: Pie Chart Data Preparation
+// ============================================================
+
+/**
+ * Aggregates filtered financial records by nivel2 field for pie chart rendering.
+ * Returns { labels, data, backgroundColor } or null when no valid data exists.
+ * - Filters out zero values
+ * - Sorts descending by total, caps at 10 categories
+ * - Aggregates remaining categories into "Outros"
+ * - Truncates labels to 40 characters with "..." suffix
+ * Validates: Requirements 3.2, 3.3, 3.5, 3.7
+ * @param {Array} filtered - Array of financial record objects with nivel2 and valor fields
+ * @returns {{ labels: string[], data: number[], backgroundColor: string[] } | null}
+ */
+function _preparePieChartData(filtered) {
+  const totals = {};
+  for (const r of filtered) {
+    if (r.nivel2 && r.nivel2.trim() !== '') {
+      totals[r.nivel2] = (totals[r.nivel2] || 0) + Math.abs(r.valor);
+    }
+  }
+
+  // Filter out zero values
+  const nonZero = Object.entries(totals).filter(([, v]) => v > 0);
+  if (nonZero.length === 0) return null; // signals empty state
+
+  // Sort descending, take top 10
+  const sorted = nonZero.sort((a, b) => b[1] - a[1]);
+  let chartEntries = sorted.slice(0, 10);
+
+  // Aggregate remaining as "Outros"
+  if (sorted.length > 10) {
+    const outrosTotal = sorted.slice(10).reduce((sum, [, v]) => sum + v, 0);
+    chartEntries.push(['Outros', outrosTotal]);
+  }
+
+  // Truncate labels for legend (max 40 chars)
+  const labels = chartEntries.map(([name]) =>
+    name.length > 40 ? name.substring(0, 37) + '...' : name
+  );
+
+  const colors = ['#4f46e5','#06b6d4','#8b5cf6','#f59e0b','#10b981',
+                  '#ef4444','#ec4899','#6366f1','#14b8a6','#f97316','#94a3b8'];
+
+  return {
+    labels,
+    data: chartEntries.map(([, v]) => v),
+    backgroundColor: colors.slice(0, chartEntries.length)
+  };
+}
+
+// ============================================================
 // SECTION: Chart Image Export & Fullscreen Mode
 // ============================================================
 
@@ -7663,30 +7793,68 @@ if (document.readyState === 'loading') {
             });
           }
 
-          // Nivel 3 chart (nivel2 field = 3ª Categoria)
+          // Nivel 3 chart (nivel2 field = 3ª Categoria) - Pie Chart
           const nivel3Canvas = document.getElementById(`chart-${expandType}-nivel3`);
           if (nivel3Canvas) {
             if (_expandCharts[`${expandType}_n3`]) _expandCharts[`${expandType}_n3`].destroy();
-            const totals3 = {};
-            for (const r of filtered) {
-              const cat = r.nivel2 || 'Sem Categoria';
-              totals3[cat] = (totals3[cat] || 0) + r.valor;
+
+            // Get pie data using _preparePieChartData aggregation
+            const pieData = _preparePieChartData(filtered);
+
+            if (!pieData) {
+              // Empty state handling
+              nivel3Canvas.style.display = 'none';
+              // Remove any existing placeholder
+              const existingPlaceholder = nivel3Canvas.parentNode.querySelector('.chart-empty-placeholder');
+              if (existingPlaceholder) existingPlaceholder.remove();
+              // Add placeholder message
+              const placeholder = document.createElement('p');
+              placeholder.className = 'chart-empty-placeholder';
+              placeholder.textContent = 'Nenhum dado de 3ª categoria disponível para os filtros selecionados.';
+              nivel3Canvas.parentNode.appendChild(placeholder);
+            } else {
+              nivel3Canvas.style.display = '';
+              // Remove placeholder if exists
+              const existingPlaceholder = nivel3Canvas.parentNode.querySelector('.chart-empty-placeholder');
+              if (existingPlaceholder) existingPlaceholder.remove();
+
+              _expandCharts[`${expandType}_n3`] = new Chart(nivel3Canvas, {
+                type: 'pie',
+                data: {
+                  labels: pieData.labels,
+                  datasets: [{
+                    data: pieData.data,
+                    backgroundColor: pieData.backgroundColor,
+                    borderColor: '#fff',
+                    borderWidth: 2
+                  }]
+                },
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: true,
+                  plugins: {
+                    legend: {
+                      position: 'bottom',
+                      labels: {
+                        boxWidth: 12,
+                        font: { size: 11 },
+                        padding: 8
+                      }
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx) => {
+                          const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+                          const pct = ((ctx.raw / total) * 100).toFixed(1);
+                          const formatted = ctx.raw.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                          return `${ctx.label}: ${formatted} (${pct}%)`;
+                        }
+                      }
+                    }
+                  }
+                }
+              });
             }
-            const sorted3 = Object.entries(totals3).sort((a, b) => b[1] - a[1]).slice(0, 10);
-            const colors = ChartEngine._colors || ['#4f46e5','#06b6d4','#8b5cf6','#f59e0b','#10b981','#ef4444','#ec4899','#6366f1','#14b8a6','#f97316'];
-            _expandCharts[`${expandType}_n3`] = new Chart(nivel3Canvas, {
-              type: 'bar',
-              data: {
-                labels: sorted3.map(([n]) => n.length > 20 ? n.substring(0, 20) + '...' : n),
-                datasets: [{ label: '3ª Categoria', data: sorted3.map(([,v]) => v), backgroundColor: colors.slice(0, sorted3.length) }]
-              },
-              options: {
-                responsive: true,
-                indexAxis: 'y',
-                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => KPICalculator.formatBRL(ctx.raw) } } },
-                scales: { x: { ticks: { callback: (v) => KPICalculator.formatBRL(v) } } }
-              }
-            });
           }
         } else {
           // Destroy expanded charts on close

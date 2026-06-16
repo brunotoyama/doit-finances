@@ -4176,3 +4176,34 @@ body.fullscreen .hamburger-btn {
   font-size: 14px;
   z-index: 9999;
 }
+
+/* === Sortable Table Headers === */
+th[data-column] {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+th[data-column]:hover {
+  background-color: rgba(99, 102, 241, 0.1);
+}
+
+th[data-column][aria-sort] {
+  background-color: rgba(99, 102, 241, 0.15);
+}
+
+.sort-indicator {
+  font-size: 0.75em;
+  margin-left: 4px;
+  color: #6366f1;
+  font-weight: bold;
+}
+
+/* === Chart Empty Placeholder === */
+.chart-empty-placeholder {
+  text-align: center;
+  color: #6b7280;
+  padding: 24px 16px;
+  font-size: 14px;
+  font-style: italic;
+}
