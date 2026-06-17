@@ -2327,7 +2327,7 @@ EventBus.on('chart:clicked', (payload) => {
       KPIDetailModal._kpiKey = 'custom';
       KPIDetailModal._page = 1;
       KPIDetailModal._sortColumn = 'data';
-      KPIDetailModal._sortDirection = 'desc';
+      KPIDetailModal._sortDirection = 'asc';
       KPIDetailModal._records = filtered;
       const titleEl = document.getElementById('kpi-detail-title');
       if (titleEl) titleEl.textContent = title;
@@ -6334,7 +6334,7 @@ const RecordDetail = {
           KPIDetailModal._kpiKey = 'custom';
           KPIDetailModal._page = 1;
           KPIDetailModal._sortColumn = 'data';
-          KPIDetailModal._sortDirection = 'desc';
+          KPIDetailModal._sortDirection = 'asc';
           KPIDetailModal._records = filtered;
           const titleEl = document.getElementById('kpi-detail-title');
           if (titleEl) titleEl.textContent = title;
@@ -6497,7 +6497,7 @@ const KPIDetailModal = {
   _records: [],
   _kpiKey: '',
   _sortColumn: 'data',
-  _sortDirection: 'desc',
+  _sortDirection: 'asc',
 
   _kpiConfig: {
     totalRecebido:        { title: 'Total Recebido',         filter: r => r.tipo === 'receita' && r.status === 'Pago' },
@@ -6517,7 +6517,7 @@ const KPIDetailModal = {
     this._kpiKey = kpiKey;
     this._page = 1;
     this._sortColumn = 'data';
-    this._sortDirection = 'desc';
+    this._sortDirection = 'asc';
 
     // For quantidadeLancamentos, include all records (even excluded)
     const includeAll = (kpiKey === 'quantidadeLancamentos' || kpiKey === 'ticketMedio');
@@ -6548,7 +6548,7 @@ const KPIDetailModal = {
     this._kpiKey = kpiKey;
     this._page = 1;
     this._sortColumn = 'data';
-    this._sortDirection = 'desc';
+    this._sortDirection = 'asc';
 
     const includeAll = (kpiKey === 'quantidadeLancamentos' || kpiKey === 'ticketMedio');
     const data = (typeof DataLayer !== 'undefined') ? DataLayer.getData(includeAll) : [];
@@ -8157,15 +8157,83 @@ function exportChartWithLabels(chartInstance, filename) {
       console.error('Erro ao exportar gráfico:', err);
     }
   } else {
-    // Bar / Line charts: draw labels on existing canvas, export, then refresh
-    drawLabelsOnCanvas(chartInstance, chartType, data);
+    // Bar / Line charts: export with legend table below (same approach as doughnut)
+    const labels = chartInstance.data.labels || [];
+    const colors = datasets[0].backgroundColor || [];
+    const total = data.reduce((s, v) => s + Math.abs(v), 0);
+
+    const entries = labels.map((name, i) => ({
+      color: Array.isArray(colors) ? (colors[i] || '#1d4ed8') : (colors || '#1d4ed8'),
+      name: name || '',
+      value: data[i],
+      formattedValue: data[i].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      percentage: total > 0 ? ((Math.abs(data[i]) / total) * 100).toFixed(1) + '%' : '0.0%'
+    }));
+
+    // Calculate legend dimensions
+    const ROW_HEIGHT_BAR = 22;
+    const PADDING_BAR = 20;
+    const LEGEND_HEIGHT_BAR = PADDING_BAR + (entries.length * ROW_HEIGHT_BAR) + PADDING_BAR;
+
+    const chartCanvas = chartInstance.canvas;
+    const chartWidth = chartCanvas.width;
+    const chartHeight = chartCanvas.height;
+    const offscreen = document.createElement('canvas');
+    offscreen.width = chartWidth;
+    offscreen.height = chartHeight + LEGEND_HEIGHT_BAR;
+    const ctx = offscreen.getContext('2d');
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+
+    // Draw chart image (top portion - clean, no labels on bars)
+    ctx.drawImage(chartCanvas, 0, 0, chartWidth, chartHeight);
+
+    // Draw separator line
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PADDING_BAR, chartHeight + 4);
+    ctx.lineTo(chartWidth - PADDING_BAR, chartHeight + 4);
+    ctx.stroke();
+
+    // Draw legend table
+    const SWATCH_SIZE_BAR = 10;
+    const FONT_BAR = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const BOLD_FONT_BAR = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textBaseline = 'middle';
+
+    let yBar = chartHeight + PADDING_BAR + 6;
+    for (const entry of entries) {
+      // Color swatch
+      ctx.fillStyle = entry.color;
+      ctx.beginPath();
+      ctx.roundRect(PADDING_BAR, yBar - SWATCH_SIZE_BAR / 2, SWATCH_SIZE_BAR, SWATCH_SIZE_BAR, 2);
+      ctx.fill();
+
+      // Label name
+      ctx.fillStyle = '#1f2937';
+      ctx.font = FONT_BAR;
+      ctx.textAlign = 'left';
+      ctx.fillText(entry.name, PADDING_BAR + SWATCH_SIZE_BAR + 8, yBar);
+
+      // BRL value
+      ctx.font = BOLD_FONT_BAR;
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#374151';
+      ctx.fillText(entry.formattedValue, chartWidth - PADDING_BAR, yBar);
+
+      yBar += ROW_HEIGHT_BAR;
+    }
+
+    // Export offscreen canvas
     try {
-      const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
+      const dataUrl = offscreen.toDataURL('image/png', 1.0);
       triggerDownload(dataUrl, filename);
     } catch (err) {
       console.error('Erro ao exportar gráfico:', err);
     }
-    chartInstance.update('none');
   }
 }
 
