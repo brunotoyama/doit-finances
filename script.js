@@ -4140,8 +4140,8 @@ const UIController = {
       case 'ultimos-lancamentos': {
         // Sort by date descending, take first 50
         const sorted = [...allData].sort((a, b) => {
-          const dateA = a.data instanceof Date ? a.data.getTime() : 0;
-          const dateB = b.data instanceof Date ? b.data.getTime() : 0;
+          const dateA = a.data instanceof Date ? a.data.getTime() : new Date(a.data).getTime() || 0;
+          const dateB = b.data instanceof Date ? b.data.getTime() : new Date(b.data).getTime() || 0;
           return dateB - dateA;
         });
         return sorted.slice(0, 50);
@@ -8279,13 +8279,13 @@ if (typeof globalThis !== 'undefined') {
           const expandType = chartId === 'receitas-chart' ? 'receitas' : 'despesas';
           const panel = document.getElementById(`expand-${expandType}`);
 
-          if (panel && !panel.hidden) {
+          if (panel && !panel.hidden && !panel.hasAttribute('hidden')) {
             const nivel2Canvas = document.getElementById(`chart-${expandType}-nivel2`);
             const nivel3Canvas = document.getElementById(`chart-${expandType}-nivel3`);
 
             const mainCanvas = chartInstance.canvas;
             const canvases = [mainCanvas];
-            if (nivel2Canvas && nivel2Canvas.style.display !== 'none') canvases.push(nivel2Canvas);
+            if (nivel2Canvas) canvases.push(nivel2Canvas);
             if (nivel3Canvas && nivel3Canvas.style.display !== 'none') canvases.push(nivel3Canvas);
 
             const maxWidth = Math.max(...canvases.map(c => c.width));
