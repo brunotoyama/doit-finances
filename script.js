@@ -7909,39 +7909,80 @@ function exportChartWithLabels(chartInstance, filename) {
     }, 0);
   }
 
-  if (hasPlugin) {
-    // Save previous datalabels state and apply new config
-    if (!chartInstance.options.plugins) chartInstance.options.plugins = {};
-    const prevDatalabels = chartInstance.options.plugins.datalabels;
-    
-    // Register plugin globally for this render cycle (Chart.js 4 approach)
-    Chart.register(ChartDataLabels);
-    
-    // Apply datalabels config
-    chartInstance.options.plugins.datalabels = buildLabelConfig(chartType, data);
+  // Draw labels manually on canvas (bypasses all plugin compatibility issues)
+  function drawLabelsOnCanvas(chart, type, values) {
+    const ctx = chart.canvas.getContext('2d');
+    const total = values.reduce((s, v) => s + Math.abs(v), 0);
+    if (total === 0) return;
 
-    // Update chart to render labels (no animation)
-    chartInstance.update('none');
+    const meta = chart.getDatasetMeta(0);
+    if (!meta || !meta.data) return;
 
-    // Capture canvas as PNG
-    try {
-      const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
-      triggerDownload(dataUrl, filename);
-    } catch (err) {
-      console.error('Erro ao exportar gráfico:', err);
+    ctx.save();
+
+    if (type === 'doughnut' || type === 'pie') {
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      meta.data.forEach((el, i) => {
+        const value = Math.abs(values[i] || 0);
+        if (value === 0) return;
+        const pct = ((value / total) * 100).toFixed(1);
+        const pctNum = (value / total) * 100;
+
+        const midAngle = (el.startAngle + el.endAngle) / 2;
+        const innerR = el.innerRadius || 0;
+        const outerR = el.outerRadius || 0;
+
+        if (pctNum >= 5) {
+          const r = (innerR + outerR) / 2;
+          const x = el.x + Math.cos(midAngle) * r;
+          const y = el.y + Math.sin(midAngle) * r;
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(pct + '%', x, y);
+        } else if (pctNum >= 2) {
+          const r = outerR + 18;
+          const x = el.x + Math.cos(midAngle) * r;
+          const y = el.y + Math.sin(midAngle) * r;
+          ctx.fillStyle = '#333333';
+          ctx.fillText(pct + '%', x, y);
+        }
+      });
+    } else {
+      // Bar / Line
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = '#333333';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+
+      meta.data.forEach((el, i) => {
+        const value = values[i];
+        if (!value || value === 0) return;
+        const formatted = (typeof KPICalculator !== 'undefined')
+          ? KPICalculator.formatBRL(value)
+          : Math.abs(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        ctx.fillText(formatted, el.x, el.y - 5);
+      });
     }
 
-    // Restore original state - disable datalabels and unregister plugin
-    chartInstance.options.plugins.datalabels = prevDatalabels !== undefined ? prevDatalabels : false;
+    ctx.restore();
+  }
+
+  // Export with manually drawn labels (no plugin dependency)
+  try {
+    drawLabelsOnCanvas(chartInstance, chartType, data);
+    const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
+    triggerDownload(dataUrl, filename);
+    // Re-render chart to remove the manually drawn labels
     chartInstance.update('none');
-    Chart.unregister(ChartDataLabels);
-  } else {
-    // Fallback: export without labels
+  } catch (err) {
+    console.error('Erro ao exportar gráfico:', err);
     try {
       const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
       triggerDownload(dataUrl, filename);
-    } catch (err) {
-      console.error('Erro ao exportar gráfico:', err);
+    } catch (e) {
+      console.error('Falha total na exportação:', e);
     }
   }
 }
