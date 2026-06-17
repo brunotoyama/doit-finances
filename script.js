@@ -7918,13 +7918,10 @@ function exportChartWithLabels(chartInstance, filename) {
     const meta = chart.getDatasetMeta(0);
     if (!meta || !meta.data) return;
 
+    const dpr = window.devicePixelRatio || 1;
     ctx.save();
 
     if (type === 'doughnut' || type === 'pie') {
-      ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
       meta.data.forEach((el, i) => {
         const value = Math.abs(values[i] || 0);
         if (value === 0) return;
@@ -7935,24 +7932,74 @@ function exportChartWithLabels(chartInstance, filename) {
         const innerR = el.innerRadius || 0;
         const outerR = el.outerRadius || 0;
 
-        if (pctNum >= 5) {
+        if (pctNum >= 8) {
+          // Large segments: label inside with shadow for readability
           const r = (innerR + outerR) / 2;
           const x = el.x + Math.cos(midAngle) * r;
           const y = el.y + Math.sin(midAngle) * r;
+
+          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          // Text shadow for contrast
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+          ctx.shadowBlur = 3;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 1;
           ctx.fillStyle = '#ffffff';
           ctx.fillText(pct + '%', x, y);
-        } else if (pctNum >= 2) {
-          const r = outerR + 18;
-          const x = el.x + Math.cos(midAngle) * r;
-          const y = el.y + Math.sin(midAngle) * r;
-          ctx.fillStyle = '#333333';
-          ctx.fillText(pct + '%', x, y);
+
+          // Reset shadow
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+        } else if (pctNum >= 3) {
+          // Medium segments: label outside with line connector
+          const startR = outerR + 8;
+          const endR = outerR + 28;
+          const lineStartX = el.x + Math.cos(midAngle) * startR;
+          const lineStartY = el.y + Math.sin(midAngle) * startR;
+          const lineEndX = el.x + Math.cos(midAngle) * endR;
+          const lineEndY = el.y + Math.sin(midAngle) * endR;
+
+          // Draw connector line
+          ctx.beginPath();
+          ctx.moveTo(lineStartX, lineStartY);
+          ctx.lineTo(lineEndX, lineEndY);
+          ctx.strokeStyle = '#6b7280';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          // Draw label with background pill
+          const textX = el.x + Math.cos(midAngle) * (endR + 4);
+          const textY = lineEndY;
+
+          ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          ctx.textAlign = midAngle > Math.PI / 2 && midAngle < Math.PI * 1.5 ? 'right' : 'left';
+          ctx.textBaseline = 'middle';
+
+          // Background pill
+          const text = pct + '%';
+          const textWidth = ctx.measureText(text).width;
+          const pillX = ctx.textAlign === 'right' ? textX - textWidth - 6 : textX - 3;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.beginPath();
+          ctx.roundRect(pillX, textY - 8, textWidth + 6, 16, 4);
+          ctx.fill();
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+
+          // Text
+          ctx.fillStyle = '#374151';
+          ctx.fillText(text, textX, textY);
         }
       });
     } else {
-      // Bar / Line
-      ctx.font = 'bold 10px sans-serif';
-      ctx.fillStyle = '#333333';
+      // Bar / Line charts
+      ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
 
@@ -7962,7 +8009,20 @@ function exportChartWithLabels(chartInstance, filename) {
         const formatted = (typeof KPICalculator !== 'undefined')
           ? KPICalculator.formatBRL(value)
           : Math.abs(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        ctx.fillText(formatted, el.x, el.y - 5);
+
+        const x = el.x;
+        const y = el.y - 8;
+
+        // Background pill for readability
+        const textWidth = ctx.measureText(formatted).width;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.beginPath();
+        ctx.roundRect(x - textWidth / 2 - 4, y - 12, textWidth + 8, 14, 3);
+        ctx.fill();
+
+        // Text
+        ctx.fillStyle = '#1f2937';
+        ctx.fillText(formatted, x, y);
       });
     }
 
