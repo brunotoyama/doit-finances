@@ -7882,7 +7882,10 @@ if (typeof globalThis !== 'undefined') {
  * @param {string} filename - Desired download filename (without extension)
  */
 function exportChartWithLabels(chartInstance, filename) {
-  if (!chartInstance || !chartInstance.canvas) return;
+  if (!chartInstance || !chartInstance.canvas) {
+    console.warn('exportChartWithLabels: chartInstance ou canvas não encontrado');
+    return;
+  }
 
   const chartType = chartInstance.config.type;
   const datasets = chartInstance.data.datasets;
@@ -7892,6 +7895,19 @@ function exportChartWithLabels(chartInstance, filename) {
 
   // Check if datalabels plugin is available
   const hasPlugin = typeof ChartDataLabels !== 'undefined';
+
+  function triggerDownload(dataUrl, fname) {
+    const link = document.createElement('a');
+    link.style.display = 'none';
+    link.download = (fname || 'chart') + '.png';
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    // Use timeout to ensure the click is processed
+    setTimeout(() => {
+      link.click();
+      setTimeout(() => { document.body.removeChild(link); }, 100);
+    }, 0);
+  }
 
   if (hasPlugin) {
     // Register plugin on the instance if not already
@@ -7912,14 +7928,7 @@ function exportChartWithLabels(chartInstance, filename) {
     // Capture canvas as PNG
     try {
       const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
-      
-      // Trigger download
-      const link = document.createElement('a');
-      link.download = (filename || 'chart') + '.png';
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      triggerDownload(dataUrl, filename);
     } catch (err) {
       console.error('Erro ao exportar gráfico:', err);
     }
@@ -7936,12 +7945,7 @@ function exportChartWithLabels(chartInstance, filename) {
     // Fallback: export without labels
     try {
       const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
-      const link = document.createElement('a');
-      link.download = (filename || 'chart') + '.png';
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      triggerDownload(dataUrl, filename);
     } catch (err) {
       console.error('Erro ao exportar gráfico:', err);
     }
@@ -7968,12 +7972,14 @@ if (typeof globalThis !== 'undefined') {
     const chartExportButtons = document.querySelectorAll('.btn-chart-export');
     chartExportButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const chartId = btn.getAttribute('data-chart-id');
         if (!chartId) return;
 
         const chartInstance = ChartEngine._instances[chartId];
         if (!chartInstance) {
-          console.warn(`Chart "${chartId}" not found for export`);
+          console.warn(`Chart "${chartId}" não encontrado. Instâncias disponíveis:`, Object.keys(ChartEngine._instances));
           return;
         }
 
