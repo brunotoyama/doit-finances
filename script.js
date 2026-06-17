@@ -1401,16 +1401,18 @@ const ChartEngine = {
         // For horizontal bar charts, check if click was on a Y-axis label
         if (config.horizontal && chart.scales && chart.scales.y) {
           const yScale = chart.scales.y;
-          const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+          const nativeEvent = event.native || event;
+          const rect = chart.canvas.getBoundingClientRect();
+          const x = nativeEvent.clientX - rect.left;
+          const y = nativeEvent.clientY - rect.top;
           
           // Check if click is in the label area (left of chart area)
-          if (canvasPosition.x < chart.chartArea.left) {
+          if (x < chart.chartArea.left + 5) {
             // Find which label was clicked based on Y position
-            for (let i = 0; i < yScale.ticks.length; i++) {
-              const labelY = yScale.getPixelForTick(i);
-              const tickHeight = yScale.height / yScale.ticks.length;
-              if (Math.abs(canvasPosition.y - labelY) < tickHeight / 2) {
-                const label = chart.data.labels[i];
+            for (let i = 0; i < chart.data.labels.length; i++) {
+              const labelY = yScale.getPixelForValue(i);
+              const tickHeight = yScale.height / chart.data.labels.length;
+              if (Math.abs(y - labelY) < tickHeight / 2) {
                 const fakeElement = { index: i };
                 const filter = this.getFilterFromClick(chartId, fakeElement);
                 if (filter && Object.keys(filter).length > 0) {
@@ -2148,8 +2150,10 @@ const ChartEngine = {
       };
       // Add onHover to show pointer cursor on Y-axis labels
       baseOptions.onHover = (event, elements, chart) => {
-        const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
-        if (canvasPosition.x < chart.chartArea.left) {
+        const nativeEvent = event.native || event;
+        const rect = chart.canvas.getBoundingClientRect();
+        const x = nativeEvent.clientX - rect.left;
+        if (x < chart.chartArea.left + 5) {
           chart.canvas.style.cursor = 'pointer';
         } else if (elements && elements.length > 0) {
           chart.canvas.style.cursor = 'pointer';
