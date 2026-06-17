@@ -1388,11 +1388,38 @@ const ChartEngine = {
       // Add onClick handler for chart interactivity (drill-down filtering)
       const chartId = config.id;
       options.onClick = (event, elements, chart) => {
-        if (!elements || elements.length === 0) return;
-        const element = elements[0];
-        const filter = this.getFilterFromClick(chartId, element);
-        if (filter && Object.keys(filter).length > 0) {
-          EventBus.emit('chart:clicked', { chartId, filter });
+        // If clicked on a bar/slice element, use it directly
+        if (elements && elements.length > 0) {
+          const element = elements[0];
+          const filter = this.getFilterFromClick(chartId, element);
+          if (filter && Object.keys(filter).length > 0) {
+            EventBus.emit('chart:clicked', { chartId, filter });
+          }
+          return;
+        }
+
+        // For horizontal bar charts, check if click was on a Y-axis label
+        if (config.horizontal && chart.scales && chart.scales.y) {
+          const yScale = chart.scales.y;
+          const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+          
+          // Check if click is in the label area (left of chart area)
+          if (canvasPosition.x < chart.chartArea.left) {
+            // Find which label was clicked based on Y position
+            for (let i = 0; i < yScale.ticks.length; i++) {
+              const labelY = yScale.getPixelForTick(i);
+              const tickHeight = yScale.height / yScale.ticks.length;
+              if (Math.abs(canvasPosition.y - labelY) < tickHeight / 2) {
+                const label = chart.data.labels[i];
+                const fakeElement = { index: i };
+                const filter = this.getFilterFromClick(chartId, fakeElement);
+                if (filter && Object.keys(filter).length > 0) {
+                  EventBus.emit('chart:clicked', { chartId, filter });
+                }
+                return;
+              }
+            }
+          }
         }
       };
 
@@ -2116,8 +2143,19 @@ const ChartEngine = {
         grid: { color: 'rgba(0, 0, 0, 0.05)' }
       };
       baseOptions.scales.y = {
-        ticks: { font: { size: 11 } },
+        ticks: { font: { size: 11 }, color: '#1d4ed8' },
         grid: { display: false }
+      };
+      // Add onHover to show pointer cursor on Y-axis labels
+      baseOptions.onHover = (event, elements, chart) => {
+        const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+        if (canvasPosition.x < chart.chartArea.left) {
+          chart.canvas.style.cursor = 'pointer';
+        } else if (elements && elements.length > 0) {
+          chart.canvas.style.cursor = 'pointer';
+        } else {
+          chart.canvas.style.cursor = 'default';
+        }
       };
     } else {
       baseOptions.scales.x = {
