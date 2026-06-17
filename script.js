@@ -7910,16 +7910,14 @@ function exportChartWithLabels(chartInstance, filename) {
   }
 
   if (hasPlugin) {
-    // Register plugin on the instance if not already
-    if (!chartInstance.config.plugins) chartInstance.config.plugins = [];
-    const hadPlugin = chartInstance.config.plugins.includes(ChartDataLabels);
-    if (!hadPlugin) {
-      chartInstance.config.plugins.push(ChartDataLabels);
-    }
-
     // Save previous datalabels state and apply new config
     if (!chartInstance.options.plugins) chartInstance.options.plugins = {};
     const prevDatalabels = chartInstance.options.plugins.datalabels;
+    
+    // Register plugin globally for this render cycle (Chart.js 4 approach)
+    Chart.register(ChartDataLabels);
+    
+    // Apply datalabels config
     chartInstance.options.plugins.datalabels = buildLabelConfig(chartType, data);
 
     // Update chart to render labels (no animation)
@@ -7933,14 +7931,10 @@ function exportChartWithLabels(chartInstance, filename) {
       console.error('Erro ao exportar gráfico:', err);
     }
 
-    // Restore original state - remove datalabels
+    // Restore original state - disable datalabels and unregister plugin
     chartInstance.options.plugins.datalabels = prevDatalabels !== undefined ? prevDatalabels : false;
-    // Remove plugin from instance if we added it
-    if (!hadPlugin) {
-      const pluginIdx = chartInstance.config.plugins.indexOf(ChartDataLabels);
-      if (pluginIdx > -1) chartInstance.config.plugins.splice(pluginIdx, 1);
-    }
     chartInstance.update('none');
+    Chart.unregister(ChartDataLabels);
   } else {
     // Fallback: export without labels
     try {
