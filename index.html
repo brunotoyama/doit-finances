@@ -7,6 +7,9 @@
   <link rel="stylesheet" href="style.css">
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Chart.js Datalabels Plugin (not globally registered — used per-chart during export only) -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script>if (window.ChartDataLabels) Chart.defaults.plugins.datalabels = false;</script>
   <!-- SheetJS/xlsx -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- jsPDF -->
@@ -707,9 +710,6 @@
         </table>
       </div>
       <div class="table-pagination" id="kpi-detail-pagination">
-        <button class="btn-page-prev" disabled>&#8592;</button>
-        <span class="page-info">Página 1 de 1</span>
-        <button class="btn-page-next" disabled>&#8594;</button>
       </div>
     </div>
   </div>
@@ -787,9 +787,6 @@
         </table>
       </div>
       <div class="table-pagination" id="alerts-modal-pagination">
-        <button class="btn-page-prev" disabled>&#8592;</button>
-        <span class="page-info">Página 1 de 1</span>
-        <button class="btn-page-next" disabled>&#8594;</button>
       </div>
     </div>
   </div>

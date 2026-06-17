@@ -6329,6 +6329,119 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ============================================================
+// SECTION: Pagination Renderer
+// ============================================================
+
+/**
+ * Compute the array of page indicators to display.
+ * When totalPages ≤ 7, returns all page numbers.
+ * When totalPages > 7, applies truncation: first page, last page, current ± 1, with ellipsis for gaps.
+ * @param {number} currentPage - 1-indexed current page
+ * @param {number} totalPages - Total number of pages
+ * @returns {Array<number|string>} Array of page numbers and 'ellipsis' markers
+ */
+function computePageButtons(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    const pages = [];
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+    return pages;
+  }
+
+  const pages = new Set();
+  pages.add(1);
+  pages.add(totalPages);
+  pages.add(currentPage);
+  if (currentPage - 1 > 0) pages.add(currentPage - 1);
+  if (currentPage + 1 <= totalPages) pages.add(currentPage + 1);
+
+  const sorted = [...pages].sort((a, b) => a - b);
+  const result = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) {
+      result.push('ellipsis');
+    }
+    result.push(sorted[i]);
+  }
+  return result;
+}
+
+/**
+ * Render pagination HTML into a container element.
+ * @param {HTMLElement} container - The pagination wrapper element
+ * @param {number} currentPage - Current active page (1-indexed)
+ * @param {number} totalPages - Total pages available
+ * @param {function(number): void} onPageChange - Callback when page is selected
+ */
+function renderPagination(container, currentPage, totalPages, onPageChange) {
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Hide pagination if no pages
+  if (totalPages <= 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'flex';
+  container.className = 'pagination-controls';
+
+  // First page button
+  const firstBtn = document.createElement('button');
+  firstBtn.className = 'page-btn';
+  firstBtn.textContent = '«';
+  firstBtn.title = 'Primeira página';
+  firstBtn.disabled = currentPage === 1;
+  firstBtn.addEventListener('click', () => onPageChange(1));
+  container.appendChild(firstBtn);
+
+  // Previous button
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'page-btn';
+  prevBtn.textContent = '‹';
+  prevBtn.title = 'Página anterior';
+  prevBtn.disabled = currentPage === 1;
+  prevBtn.addEventListener('click', () => onPageChange(currentPage - 1));
+  container.appendChild(prevBtn);
+
+  // Page number buttons
+  const pages = computePageButtons(currentPage, totalPages);
+  for (const page of pages) {
+    if (page === 'ellipsis') {
+      const ellipsis = document.createElement('span');
+      ellipsis.className = 'pagination-ellipsis';
+      ellipsis.textContent = '…';
+      container.appendChild(ellipsis);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'page-btn' + (page === currentPage ? ' active' : '');
+      btn.textContent = String(page);
+      if (page === currentPage) {
+        btn.setAttribute('aria-current', 'page');
+      }
+      btn.addEventListener('click', () => onPageChange(page));
+      container.appendChild(btn);
+    }
+  }
+
+  // Next button
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'page-btn';
+  nextBtn.textContent = '›';
+  nextBtn.title = 'Próxima página';
+  nextBtn.disabled = currentPage === totalPages;
+  nextBtn.addEventListener('click', () => onPageChange(currentPage + 1));
+  container.appendChild(nextBtn);
+
+  // Last page button
+  const lastBtn = document.createElement('button');
+  lastBtn.className = 'page-btn';
+  lastBtn.textContent = '»';
+  lastBtn.title = 'Última página';
+  lastBtn.disabled = currentPage === totalPages;
+  lastBtn.addEventListener('click', () => onPageChange(totalPages));
+  container.appendChild(lastBtn);
+}
+
+// ============================================================
 // SECTION: KPI Detail Modal
 // ============================================================
 
@@ -6560,16 +6673,12 @@ const KPIDetailModal = {
       tbody.innerHTML = html;
     }
 
-    // Pagination
-    const paginationEl = document.getElementById('kpi-detail-pagination');
-    if (paginationEl) {
-      const prevBtn = paginationEl.querySelector('.btn-page-prev');
-      const nextBtn = paginationEl.querySelector('.btn-page-next');
-      const pageInfo = paginationEl.querySelector('.page-info');
-      if (prevBtn) prevBtn.disabled = this._page <= 1;
-      if (nextBtn) nextBtn.disabled = this._page >= totalPages;
-      if (pageInfo) pageInfo.textContent = `Página ${this._page} de ${totalPages}`;
-    }
+    // Multi-page pagination
+    const paginationContainer = document.getElementById('kpi-detail-pagination');
+    renderPagination(paginationContainer, this._page, totalPages, (newPage) => {
+      this._page = Math.max(1, Math.min(newPage, totalPages));
+      this._renderTable();
+    });
   },
 
   _esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; },
@@ -6583,17 +6692,7 @@ const KPIDetailModal = {
     const modal = document.getElementById('kpi-detail-modal');
     if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) this.close(); });
 
-    // Pagination
-    const paginationEl = document.getElementById('kpi-detail-pagination');
-    if (paginationEl) {
-      const prevBtn = paginationEl.querySelector('.btn-page-prev');
-      const nextBtn = paginationEl.querySelector('.btn-page-next');
-      if (prevBtn) prevBtn.addEventListener('click', () => { if (this._page > 1) { this._page--; this._renderTable(); } });
-      if (nextBtn) nextBtn.addEventListener('click', () => {
-        const totalPages = Math.ceil(this._records.length / this._pageSize);
-        if (this._page < totalPages) { this._page++; this._renderTable(); }
-      });
-    }
+    // Pagination is now handled dynamically by renderPagination() in _renderTable()
 
     // Row click to open record detail
     const tbody = document.querySelector('#table-kpi-detail tbody');
@@ -6798,17 +6897,12 @@ const AlertsModal = {
       tbody.innerHTML = html;
     }
 
-    // Pagination
-    const paginationEl = document.getElementById('alerts-modal-pagination');
-    if (paginationEl) {
-      const prevBtn = paginationEl.querySelector('.btn-page-prev');
-      const nextBtn = paginationEl.querySelector('.btn-page-next');
-      const pageInfo = paginationEl.querySelector('.page-info');
-
-      if (prevBtn) prevBtn.disabled = this._page <= 1;
-      if (nextBtn) nextBtn.disabled = this._page >= totalPages;
-      if (pageInfo) pageInfo.textContent = `Página ${this._page} de ${totalPages}`;
-    }
+    // Multi-page pagination
+    const paginationContainer = document.getElementById('alerts-modal-pagination');
+    renderPagination(paginationContainer, this._page, totalPages, (newPage) => {
+      this._page = Math.max(1, Math.min(newPage, totalPages));
+      this._renderTable();
+    });
   },
 
   _esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; },
@@ -6873,17 +6967,7 @@ const AlertsModal = {
       this._applyFilters();
     });
 
-    // Pagination
-    const paginationEl = document.getElementById('alerts-modal-pagination');
-    if (paginationEl) {
-      const prevBtn = paginationEl.querySelector('.btn-page-prev');
-      const nextBtn = paginationEl.querySelector('.btn-page-next');
-      if (prevBtn) prevBtn.addEventListener('click', () => { if (this._page > 1) { this._page--; this._renderTable(); } });
-      if (nextBtn) nextBtn.addEventListener('click', () => {
-        const totalPages = Math.ceil(this._filteredRecords.length / this._pageSize);
-        if (this._page < totalPages) { this._page++; this._renderTable(); }
-      });
-    }
+    // Pagination is now handled by renderPagination() in _renderTable()
 
     // Click row to open record detail
     const tbody = document.querySelector('#table-alerts-modal tbody');
@@ -7719,36 +7803,186 @@ function _preparePieChartData(filtered) {
 }
 
 // ============================================================
+// SECTION: Chart Export Data Labels
+// ============================================================
+
+/**
+ * Calculate percentage for a segment value relative to total.
+ * @param {number} value - Segment value
+ * @param {number} total - Sum of all segments
+ * @returns {string} Percentage string rounded to 1 decimal (e.g., "23.4%")
+ */
+function calculatePercentage(value, total) {
+  if (total === 0) return '0.0%';
+  return ((value / total) * 100).toFixed(1) + '%';
+}
+
+/**
+ * Build datalabels config based on chart type.
+ * @param {'doughnut'|'pie'|'bar'|'line'} chartType - Type of chart
+ * @param {number[]} data - Dataset values
+ * @returns {Object} chartjs-plugin-datalabels configuration object
+ */
+function buildLabelConfig(chartType, data) {
+  const total = data.reduce((s, v) => s + Math.abs(v), 0);
+
+  if (chartType === 'doughnut' || chartType === 'pie') {
+    return {
+      display: function(context) {
+        return context.dataset.data[context.dataIndex] > 0;
+      },
+      formatter: function(value) {
+        return calculatePercentage(Math.abs(value), total);
+      },
+      anchor: function(context) {
+        const pct = (Math.abs(context.dataset.data[context.dataIndex]) / total) * 100;
+        return pct >= 5 ? 'center' : 'end';
+      },
+      align: function(context) {
+        const pct = (Math.abs(context.dataset.data[context.dataIndex]) / total) * 100;
+        return pct >= 5 ? 'center' : 'end';
+      },
+      offset: function(context) {
+        const pct = (Math.abs(context.dataset.data[context.dataIndex]) / total) * 100;
+        return pct < 5 ? 10 : 0;
+      },
+      color: function(context) {
+        const pct = (Math.abs(context.dataset.data[context.dataIndex]) / total) * 100;
+        return pct >= 5 ? '#fff' : '#333';
+      },
+      font: { weight: 'bold', size: 11 }
+    };
+  }
+
+  // Bar and Line charts
+  return {
+    display: function(context) {
+      return context.dataset.data[context.dataIndex] !== 0;
+    },
+    formatter: function(value) {
+      return typeof KPICalculator !== 'undefined' ? KPICalculator.formatBRL(value) : value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    },
+    anchor: 'end',
+    align: 'top',
+    color: '#333',
+    font: { size: 10, weight: 'bold' }
+  };
+}
+
+// Expose for testing
+if (typeof globalThis !== 'undefined') {
+  globalThis.calculatePercentage = calculatePercentage;
+  globalThis.buildLabelConfig = buildLabelConfig;
+}
+
+/**
+ * Export a Chart.js instance as PNG with data labels enabled temporarily.
+ * Uses chartjs-plugin-datalabels to add percentages and values during export only.
+ * @param {object} chartInstance - The Chart.js chart instance
+ * @param {string} filename - Desired download filename (without extension)
+ */
+function exportChartWithLabels(chartInstance, filename) {
+  if (!chartInstance || !chartInstance.canvas) return;
+
+  const chartType = chartInstance.config.type;
+  const datasets = chartInstance.data.datasets;
+  
+  // Get data from first dataset
+  const data = datasets[0] ? datasets[0].data.map(v => Math.abs(Number(v) || 0)) : [];
+
+  // Check if datalabels plugin is available
+  const hasPlugin = typeof ChartDataLabels !== 'undefined';
+
+  if (hasPlugin) {
+    // Save original options
+    const originalPlugins = JSON.parse(JSON.stringify(chartInstance.options.plugins || {}));
+    const hadDatalabels = chartInstance.isPluginEnabled && chartInstance.isPluginEnabled(ChartDataLabels);
+
+    // Register plugin on the instance if not already
+    if (!chartInstance.config.plugins) chartInstance.config.plugins = [];
+    if (!chartInstance.config.plugins.includes(ChartDataLabels)) {
+      chartInstance.config.plugins.push(ChartDataLabels);
+    }
+
+    // Apply datalabels config
+    if (!chartInstance.options.plugins) chartInstance.options.plugins = {};
+    chartInstance.options.plugins.datalabels = buildLabelConfig(chartType, data);
+
+    // Update chart to render labels (no animation)
+    chartInstance.update('none');
+
+    // Capture canvas as PNG
+    try {
+      const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
+      
+      // Trigger download
+      const link = document.createElement('a');
+      link.download = (filename || 'chart') + '.png';
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Erro ao exportar gráfico:', err);
+      // Fallback: try without labels
+      const fallbackUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
+      const link = document.createElement('a');
+      link.download = (filename || 'chart') + '.png';
+      link.href = fallbackUrl;
+      link.click();
+    }
+
+    // Restore original state - remove datalabels
+    chartInstance.options.plugins.datalabels = false;
+    // Remove plugin from instance plugins array
+    const pluginIdx = chartInstance.config.plugins.indexOf(ChartDataLabels);
+    if (pluginIdx > -1 && !hadDatalabels) {
+      chartInstance.config.plugins.splice(pluginIdx, 1);
+    }
+    chartInstance.update('none');
+  } else {
+    // Fallback: export without labels
+    try {
+      const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
+      const link = document.createElement('a');
+      link.download = (filename || 'chart') + '.png';
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Erro ao exportar gráfico:', err);
+    }
+  }
+}
+
+// Expose for testing
+if (typeof globalThis !== 'undefined') {
+  globalThis.exportChartWithLabels = exportChartWithLabels;
+}
+
+// ============================================================
 // SECTION: Chart Image Export & Fullscreen Mode
 // ============================================================
 
 /**
- * Wire per-chart export buttons to ChartEngine.exportChartImage + ExportModule.triggerDownload.
+ * Wire per-chart export buttons to exportChartWithLabels (with datalabels during export).
  * Wire fullscreen mode toggle via #btn-fullscreen.
- * Validates: Requirements 8.2, 8.3
+ * Validates: Requirements 2.1, 2.2, 2.6, 2.7, 8.2, 8.3
  */
 (function initChartExportAndFullscreen() {
   function setup() {
     // --- Per-chart export buttons ---
     const chartExportButtons = document.querySelectorAll('.btn-chart-export');
     chartExportButtons.forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', (e) => {
         const chartId = btn.getAttribute('data-chart-id');
         if (!chartId) return;
 
-        try {
-          const blob = await ChartEngine.exportChartImage(chartId);
-          const filename = `grafico-${chartId}-${new Date().toISOString().slice(0, 10)}.png`;
-          ExportModule.triggerDownload(blob, filename);
-        } catch (error) {
-          console.error('Erro ao exportar gráfico:', error);
-          EventBus.emit('error:occurred', {
-            type: 'export',
-            stage: 'chart-image',
-            message: `Erro ao exportar gráfico: ${error.message}`,
-            action: 'retry'
-          });
+        const chartInstance = ChartEngine._instances[chartId];
+        if (!chartInstance) {
+          console.warn(`Chart "${chartId}" not found for export`);
+          return;
         }
+
+        const filename = `grafico-${chartId}-${new Date().toISOString().slice(0, 10)}`;
+        exportChartWithLabels(chartInstance, filename);
       });
     });
 
@@ -8087,3 +8321,11 @@ function _preparePieChartData(filtered) {
     initKPIClicks();
   }
 })();
+
+// ============================================================
+// SECTION: Module Exports (for testing in Node.js environment)
+// ============================================================
+/* istanbul ignore next */
+if (typeof globalThis !== 'undefined') {
+  globalThis.computePageButtons = computePageButtons;
+}
