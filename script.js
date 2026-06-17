@@ -4097,7 +4097,7 @@ const UIController = {
       // Initialize state for this table
       this._tableState[tableId] = {
         page: 1,
-        sortColumn: null,
+        sortColumn: 'data',
         sortDirection: 'asc',
         searchQuery: '',
         data: tableData,
