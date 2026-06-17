@@ -129,7 +129,8 @@ const CHART_CONFIGS = [
   { id: 'receitas-chart',        type: 'doughnut', title: 'Receitas por Categoria' },
   { id: 'despesas-chart',        type: 'doughnut', title: 'Despesas por Categoria' },
   { id: 'recebimentos-proj',     type: 'bar',      title: 'Recebimentos por Projeto', horizontal: true },
-  { id: 'top-clientes',          type: 'bar',      title: 'Top Clientes', horizontal: true }
+  { id: 'top-clientes',          type: 'bar',      title: 'Top Clientes', horizontal: true },
+  { id: 'tipo-pagamento',        type: 'doughnut', title: 'Distribuição por Tipo de Pagamento' }
 ];
 
 /**
@@ -1347,6 +1348,9 @@ const ChartEngine = {
   /** @type {string[]} Professional financial color palette for series */
   _colors: ['#1d4ed8', '#0d7a3f', '#b45309', '#7c3aed', '#0891b2', '#be185d', '#4338ca', '#15803d', '#c2410c', '#6d28d9'],
 
+  /** @type {string[]} 12 visually distinct colors for month-based bar charts */
+  _monthPalette: ['#1d4ed8', '#0d9488', '#d97706', '#7c3aed', '#0891b2', '#be185d', '#15803d', '#c2410c', '#4338ca', '#b45309', '#0e7490', '#9333ea'],
+
   /** @type {string} Color for positive values */
   _positiveColor: '#0d7a3f',
 
@@ -1466,6 +1470,9 @@ const ChartEngine = {
       case 'top-clientes':
         chartData = this._prepareTopClientes(data);
         break;
+      case 'tipo-pagamento':
+        chartData = this._prepareTipoPagamentoData(data);
+        break;
       default:
         return { labels: [], datasets: [] };
     }
@@ -1519,7 +1526,7 @@ const ChartEngine = {
       return receitas - despesas;
     });
 
-    const backgroundColors = values.map(v => v >= 0 ? this._positiveColor : this._negativeColor);
+    const backgroundColors = values.map((_, i) => this._monthPalette[i % 12]);
 
     return {
       labels: monthKeys.map(k => this._formatMonthLabel(k)),
@@ -1875,6 +1882,43 @@ const ChartEngine = {
   },
 
   /**
+   * Tipo de Pagamento: doughnut chart grouped by tipoPagamento field.
+   * @param {FinancialRecord[]} data - Financial records
+   * @returns {Object|null} Chart.js data object or null if no valid data
+   * @private
+   */
+  _prepareTipoPagamentoData(data) {
+    const totals = {};
+    for (const record of data) {
+      if (record.tipoPagamento && record.tipoPagamento.trim() !== '') {
+        const key = record.tipoPagamento.trim();
+        totals[key] = (totals[key] || 0) + Math.abs(record.valor);
+      }
+    }
+
+    const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+
+    if (sorted.length === 0) {
+      return { labels: [], datasets: [] };
+    }
+
+    const labels = sorted.map(([name]) => name);
+    const values = sorted.map(([, val]) => val);
+    const colors = labels.map((_, i) => this._colors[i % this._colors.length]);
+
+    return {
+      labels,
+      datasets: [{
+        label: 'Tipo de Pagamento',
+        data: values,
+        backgroundColor: colors,
+        borderColor: '#ffffff',
+        borderWidth: 2
+      }]
+    };
+  },
+
+  /**
    * Inadimplência: bar chart of overdue (vencido) amounts by month.
    * @private
    */
@@ -2215,6 +2259,8 @@ const ChartEngine = {
         return { cliente: label };
       case 'status-financeiro':
         return { status: label };
+      case 'tipo-pagamento':
+        return { tipoPagamento: label };
       default:
         return {};
     }
@@ -7876,8 +7922,121 @@ if (typeof globalThis !== 'undefined') {
 }
 
 /**
- * Export a Chart.js instance as PNG with data labels enabled temporarily.
- * Uses chartjs-plugin-datalabels to add percentages and values during export only.
+ * Draw value labels directly on chart canvas for bar/line exports.
+ * @param {object} chart - Chart.js instance
+ * @param {string} type - Chart type
+ * @param {number[]} values - Dataset values
+ */
+function drawLabelsOnCanvas(chart, type, values) {
+  const ctx = chart.canvas.getContext('2d');
+  const total = values.reduce((s, v) => s + Math.abs(v), 0);
+  if (total === 0) return;
+
+  const meta = chart.getDatasetMeta(0);
+  if (!meta || !meta.data) return;
+
+  ctx.save();
+
+  if (type === 'doughnut' || type === 'pie') {
+    meta.data.forEach((el, i) => {
+      const value = Math.abs(values[i] || 0);
+      if (value === 0) return;
+      const pct = ((value / total) * 100).toFixed(1);
+      const pctNum = (value / total) * 100;
+
+      const midAngle = (el.startAngle + el.endAngle) / 2;
+      const innerR = el.innerRadius || 0;
+      const outerR = el.outerRadius || 0;
+
+      if (pctNum >= 8) {
+        const r = (innerR + outerR) / 2;
+        const x = el.x + Math.cos(midAngle) * r;
+        const y = el.y + Math.sin(midAngle) * r;
+
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(pct + '%', x, y);
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      } else if (pctNum >= 3) {
+        const startR = outerR + 8;
+        const endR = outerR + 28;
+        const lineStartX = el.x + Math.cos(midAngle) * startR;
+        const lineStartY = el.y + Math.sin(midAngle) * startR;
+        const lineEndX = el.x + Math.cos(midAngle) * endR;
+        const lineEndY = el.y + Math.sin(midAngle) * endR;
+
+        ctx.beginPath();
+        ctx.moveTo(lineStartX, lineStartY);
+        ctx.lineTo(lineEndX, lineEndY);
+        ctx.strokeStyle = '#6b7280';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        const textX = el.x + Math.cos(midAngle) * (endR + 4);
+        const textY = lineEndY;
+
+        ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = midAngle > Math.PI / 2 && midAngle < Math.PI * 1.5 ? 'right' : 'left';
+        ctx.textBaseline = 'middle';
+
+        const text = pct + '%';
+        const textWidth = ctx.measureText(text).width;
+        const pillX = ctx.textAlign === 'right' ? textX - textWidth - 6 : textX - 3;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(pillX, textY - 8, textWidth + 6, 16, 4);
+        ctx.fill();
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#374151';
+        ctx.fillText(text, textX, textY);
+      }
+    });
+  } else {
+    // Bar / Line charts
+    ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+
+    meta.data.forEach((el, i) => {
+      const value = values[i];
+      if (!value || value === 0) return;
+      const formatted = (typeof KPICalculator !== 'undefined')
+        ? KPICalculator.formatBRL(value)
+        : Math.abs(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+      const x = el.x;
+      const y = el.y - 8;
+
+      const textWidth = ctx.measureText(formatted).width;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.roundRect(x - textWidth / 2 - 4, y - 12, textWidth + 8, 14, 3);
+      ctx.fill();
+
+      ctx.fillStyle = '#1f2937';
+      ctx.fillText(formatted, x, y);
+    });
+  }
+
+  ctx.restore();
+}
+
+/**
+ * Export a Chart.js instance as PNG.
+ * For doughnut/pie charts: creates offscreen canvas with legend table below (no slice labels).
+ * For bar/line charts: draws labels on canvas, exports, then refreshes chart.
  * @param {object} chartInstance - The Chart.js chart instance
  * @param {string} filename - Desired download filename (without extension)
  */
@@ -7889,12 +8048,8 @@ function exportChartWithLabels(chartInstance, filename) {
 
   const chartType = chartInstance.config.type;
   const datasets = chartInstance.data.datasets;
-  
-  // Get data from first dataset
   const data = datasets[0] ? datasets[0].data.map(v => Math.abs(Number(v) || 0)) : [];
-
-  // Check if datalabels plugin is available
-  const hasPlugin = typeof ChartDataLabels !== 'undefined';
+  const isDoughnut = (chartType === 'doughnut' || chartType === 'pie');
 
   function triggerDownload(dataUrl, fname) {
     const link = document.createElement('a');
@@ -7902,148 +8057,115 @@ function exportChartWithLabels(chartInstance, filename) {
     link.download = (fname || 'chart') + '.png';
     link.href = dataUrl;
     document.body.appendChild(link);
-    // Use timeout to ensure the click is processed
     setTimeout(() => {
       link.click();
       setTimeout(() => { document.body.removeChild(link); }, 100);
     }, 0);
   }
 
-  // Draw labels manually on canvas (bypasses all plugin compatibility issues)
-  function drawLabelsOnCanvas(chart, type, values) {
-    const ctx = chart.canvas.getContext('2d');
-    const total = values.reduce((s, v) => s + Math.abs(v), 0);
-    if (total === 0) return;
+  if (isDoughnut) {
+    // Prepare legend entries
+    const labels = chartInstance.data.labels || [];
+    const colors = datasets[0].backgroundColor || [];
+    const total = data.reduce((s, v) => s + v, 0);
+    
+    const entries = labels.map((name, i) => ({
+      color: colors[i] || '#999',
+      name: name || 'Sem nome',
+      value: data[i],
+      formattedValue: data[i].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      percentage: total > 0 ? ((data[i] / total) * 100).toFixed(1) + '%' : '0.0%'
+    })).sort((a, b) => b.value - a.value);
 
-    const meta = chart.getDatasetMeta(0);
-    if (!meta || !meta.data) return;
+    // Calculate legend dimensions
+    const ROW_HEIGHT = 24;
+    const PADDING = 20;
+    const LEGEND_HEIGHT = PADDING + (entries.length * ROW_HEIGHT) + PADDING;
 
-    const dpr = window.devicePixelRatio || 1;
-    ctx.save();
+    // Create offscreen canvas
+    const chartCanvas = chartInstance.canvas;
+    const chartWidth = chartCanvas.width;
+    const chartHeight = chartCanvas.height;
+    const offscreen = document.createElement('canvas');
+    offscreen.width = chartWidth;
+    offscreen.height = chartHeight + LEGEND_HEIGHT;
+    const ctx = offscreen.getContext('2d');
 
-    if (type === 'doughnut' || type === 'pie') {
-      meta.data.forEach((el, i) => {
-        const value = Math.abs(values[i] || 0);
-        if (value === 0) return;
-        const pct = ((value / total) * 100).toFixed(1);
-        const pctNum = (value / total) * 100;
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, offscreen.width, offscreen.height);
 
-        const midAngle = (el.startAngle + el.endAngle) / 2;
-        const innerR = el.innerRadius || 0;
-        const outerR = el.outerRadius || 0;
+    // Draw chart image (top portion)
+    ctx.drawImage(chartCanvas, 0, 0, chartWidth, chartHeight);
 
-        if (pctNum >= 8) {
-          // Large segments: label inside with shadow for readability
-          const r = (innerR + outerR) / 2;
-          const x = el.x + Math.cos(midAngle) * r;
-          const y = el.y + Math.sin(midAngle) * r;
+    // Draw separator line
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PADDING, chartHeight + 4);
+    ctx.lineTo(chartWidth - PADDING, chartHeight + 4);
+    ctx.stroke();
 
-          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
+    // Draw legend table
+    const SWATCH_SIZE = 12;
+    const FONT = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const BOLD_FONT = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.font = FONT;
+    ctx.textBaseline = 'middle';
 
-          // Text shadow for contrast
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-          ctx.shadowBlur = 3;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 1;
-          ctx.fillStyle = '#ffffff';
-          ctx.fillText(pct + '%', x, y);
+    let y = chartHeight + PADDING + 8;
+    for (const entry of entries) {
+      // Color swatch (rounded rect)
+      ctx.fillStyle = entry.color;
+      ctx.beginPath();
+      ctx.roundRect(PADDING, y - SWATCH_SIZE / 2, SWATCH_SIZE, SWATCH_SIZE, 2);
+      ctx.fill();
 
-          // Reset shadow
-          ctx.shadowColor = 'transparent';
-          ctx.shadowBlur = 0;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 0;
-        } else if (pctNum >= 3) {
-          // Medium segments: label outside with line connector
-          const startR = outerR + 8;
-          const endR = outerR + 28;
-          const lineStartX = el.x + Math.cos(midAngle) * startR;
-          const lineStartY = el.y + Math.sin(midAngle) * startR;
-          const lineEndX = el.x + Math.cos(midAngle) * endR;
-          const lineEndY = el.y + Math.sin(midAngle) * endR;
-
-          // Draw connector line
-          ctx.beginPath();
-          ctx.moveTo(lineStartX, lineStartY);
-          ctx.lineTo(lineEndX, lineEndY);
-          ctx.strokeStyle = '#6b7280';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-
-          // Draw label with background pill
-          const textX = el.x + Math.cos(midAngle) * (endR + 4);
-          const textY = lineEndY;
-
-          ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-          ctx.textAlign = midAngle > Math.PI / 2 && midAngle < Math.PI * 1.5 ? 'right' : 'left';
-          ctx.textBaseline = 'middle';
-
-          // Background pill
-          const text = pct + '%';
-          const textWidth = ctx.measureText(text).width;
-          const pillX = ctx.textAlign === 'right' ? textX - textWidth - 6 : textX - 3;
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.beginPath();
-          ctx.roundRect(pillX, textY - 8, textWidth + 6, 16, 4);
-          ctx.fill();
-          ctx.strokeStyle = '#e2e8f0';
-          ctx.lineWidth = 0.5;
-          ctx.stroke();
-
-          // Text
-          ctx.fillStyle = '#374151';
-          ctx.fillText(text, textX, textY);
+      // Category name
+      ctx.fillStyle = '#1f2937';
+      ctx.font = FONT;
+      ctx.textAlign = 'left';
+      const maxNameWidth = chartWidth * 0.45;
+      let displayName = entry.name;
+      if (ctx.measureText(displayName).width > maxNameWidth) {
+        while (ctx.measureText(displayName + '...').width > maxNameWidth && displayName.length > 0) {
+          displayName = displayName.slice(0, -1);
         }
-      });
-    } else {
-      // Bar / Line charts
-      ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
+        displayName += '...';
+      }
+      ctx.fillText(displayName, PADDING + SWATCH_SIZE + 10, y);
 
-      meta.data.forEach((el, i) => {
-        const value = values[i];
-        if (!value || value === 0) return;
-        const formatted = (typeof KPICalculator !== 'undefined')
-          ? KPICalculator.formatBRL(value)
-          : Math.abs(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      // BRL value
+      ctx.font = BOLD_FONT;
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#374151';
+      ctx.fillText(entry.formattedValue, chartWidth - PADDING - 70, y);
 
-        const x = el.x;
-        const y = el.y - 8;
+      // Percentage
+      ctx.font = FONT;
+      ctx.fillStyle = '#6b7280';
+      ctx.fillText(entry.percentage, chartWidth - PADDING, y);
 
-        // Background pill for readability
-        const textWidth = ctx.measureText(formatted).width;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-        ctx.beginPath();
-        ctx.roundRect(x - textWidth / 2 - 4, y - 12, textWidth + 8, 14, 3);
-        ctx.fill();
-
-        // Text
-        ctx.fillStyle = '#1f2937';
-        ctx.fillText(formatted, x, y);
-      });
+      y += ROW_HEIGHT;
     }
 
-    ctx.restore();
-  }
-
-  // Export with manually drawn labels (no plugin dependency)
-  try {
+    // Export offscreen canvas
+    try {
+      const dataUrl = offscreen.toDataURL('image/png', 1.0);
+      triggerDownload(dataUrl, filename);
+    } catch (err) {
+      console.error('Erro ao exportar gráfico:', err);
+    }
+  } else {
+    // Bar / Line charts: draw labels on existing canvas, export, then refresh
     drawLabelsOnCanvas(chartInstance, chartType, data);
-    const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
-    triggerDownload(dataUrl, filename);
-    // Re-render chart to remove the manually drawn labels
-    chartInstance.update('none');
-  } catch (err) {
-    console.error('Erro ao exportar gráfico:', err);
     try {
       const dataUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
       triggerDownload(dataUrl, filename);
-    } catch (e) {
-      console.error('Falha total na exportação:', e);
+    } catch (err) {
+      console.error('Erro ao exportar gráfico:', err);
     }
+    chartInstance.update('none');
   }
 }
 
