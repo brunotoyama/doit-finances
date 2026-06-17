@@ -2310,7 +2310,7 @@ EventBus.on('chart:clicked', (payload) => {
   const chartId = payload.chartId;
   
   // For project and client charts, open a popup with filtered records
-  if (chartId === 'recebimentos-proj' || chartId === 'top-clientes') {
+  if (chartId === 'recebimentos-proj' || chartId === 'top-clientes' || chartId === 'tipo-pagamento') {
     const data = UIController._currentData || DataLayer.getData();
     let filtered = data;
     let title = '';
@@ -2321,6 +2321,9 @@ EventBus.on('chart:clicked', (payload) => {
     } else if (payload.filter.cliente) {
       filtered = data.filter(r => r.cliente === payload.filter.cliente);
       title = 'Lançamentos: ' + payload.filter.cliente;
+    } else if (payload.filter.tipoPagamento) {
+      filtered = data.filter(r => r.tipoPagamento === payload.filter.tipoPagamento);
+      title = 'Lançamentos: ' + payload.filter.tipoPagamento;
     }
     
     if (window.KPIDetailModal) {
@@ -4013,6 +4016,7 @@ const UIController = {
       title: 'Últimos Lançamentos',
       columns: [
         { key: 'data', label: 'Data' },
+        { key: 'descricao', label: 'Descrição' },
         { key: 'projeto', label: 'Projeto' },
         { key: 'cliente', label: 'De/Para' },
         { key: 'valor', label: 'Valor' },
@@ -4098,7 +4102,7 @@ const UIController = {
       this._tableState[tableId] = {
         page: 1,
         sortColumn: 'data',
-        sortDirection: 'asc',
+        sortDirection: tableId === 'ultimos-lancamentos' ? 'desc' : 'asc',
         searchQuery: '',
         data: tableData,
         filteredData: tableData,
@@ -8269,6 +8273,53 @@ if (typeof globalThis !== 'undefined') {
         }
 
         const filename = `grafico-${chartId}-${new Date().toISOString().slice(0, 10)}`;
+
+        // Check if receitas/despesas chart has expanded panel visible
+        if (chartId === 'receitas-chart' || chartId === 'despesas-chart') {
+          const expandType = chartId === 'receitas-chart' ? 'receitas' : 'despesas';
+          const panel = document.getElementById(`expand-${expandType}`);
+
+          if (panel && !panel.hidden) {
+            const nivel2Canvas = document.getElementById(`chart-${expandType}-nivel2`);
+            const nivel3Canvas = document.getElementById(`chart-${expandType}-nivel3`);
+
+            const mainCanvas = chartInstance.canvas;
+            const canvases = [mainCanvas];
+            if (nivel2Canvas && nivel2Canvas.style.display !== 'none') canvases.push(nivel2Canvas);
+            if (nivel3Canvas && nivel3Canvas.style.display !== 'none') canvases.push(nivel3Canvas);
+
+            const maxWidth = Math.max(...canvases.map(c => c.width));
+            const totalHeight = canvases.reduce((h, c) => h + c.height + 20, 0) + 20;
+
+            const offscreen = document.createElement('canvas');
+            offscreen.width = maxWidth;
+            offscreen.height = totalHeight;
+            const ctx = offscreen.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+
+            let yOffset = 10;
+            for (const canvas of canvases) {
+              const x = (maxWidth - canvas.width) / 2;
+              ctx.drawImage(canvas, x, yOffset, canvas.width, canvas.height);
+              yOffset += canvas.height + 20;
+            }
+
+            try {
+              const dataUrl = offscreen.toDataURL('image/png', 1.0);
+              const link = document.createElement('a');
+              link.style.display = 'none';
+              link.download = filename + '.png';
+              link.href = dataUrl;
+              document.body.appendChild(link);
+              setTimeout(() => { link.click(); setTimeout(() => { document.body.removeChild(link); }, 100); }, 0);
+            } catch (err) {
+              console.error('Erro ao exportar gráficos expandidos:', err);
+            }
+            return;
+          }
+        }
+
         exportChartWithLabels(chartInstance, filename);
       });
     });
