@@ -7894,18 +7894,16 @@ function exportChartWithLabels(chartInstance, filename) {
   const hasPlugin = typeof ChartDataLabels !== 'undefined';
 
   if (hasPlugin) {
-    // Save original options
-    const originalPlugins = JSON.parse(JSON.stringify(chartInstance.options.plugins || {}));
-    const hadDatalabels = chartInstance.isPluginEnabled && chartInstance.isPluginEnabled(ChartDataLabels);
-
     // Register plugin on the instance if not already
     if (!chartInstance.config.plugins) chartInstance.config.plugins = [];
-    if (!chartInstance.config.plugins.includes(ChartDataLabels)) {
+    const hadPlugin = chartInstance.config.plugins.includes(ChartDataLabels);
+    if (!hadPlugin) {
       chartInstance.config.plugins.push(ChartDataLabels);
     }
 
-    // Apply datalabels config
+    // Save previous datalabels state and apply new config
     if (!chartInstance.options.plugins) chartInstance.options.plugins = {};
+    const prevDatalabels = chartInstance.options.plugins.datalabels;
     chartInstance.options.plugins.datalabels = buildLabelConfig(chartType, data);
 
     // Update chart to render labels (no animation)
@@ -7919,23 +7917,19 @@ function exportChartWithLabels(chartInstance, filename) {
       const link = document.createElement('a');
       link.download = (filename || 'chart') + '.png';
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (err) {
       console.error('Erro ao exportar gráfico:', err);
-      // Fallback: try without labels
-      const fallbackUrl = chartInstance.canvas.toDataURL('image/png', 1.0);
-      const link = document.createElement('a');
-      link.download = (filename || 'chart') + '.png';
-      link.href = fallbackUrl;
-      link.click();
     }
 
     // Restore original state - remove datalabels
-    chartInstance.options.plugins.datalabels = false;
-    // Remove plugin from instance plugins array
-    const pluginIdx = chartInstance.config.plugins.indexOf(ChartDataLabels);
-    if (pluginIdx > -1 && !hadDatalabels) {
-      chartInstance.config.plugins.splice(pluginIdx, 1);
+    chartInstance.options.plugins.datalabels = prevDatalabels !== undefined ? prevDatalabels : false;
+    // Remove plugin from instance if we added it
+    if (!hadPlugin) {
+      const pluginIdx = chartInstance.config.plugins.indexOf(ChartDataLabels);
+      if (pluginIdx > -1) chartInstance.config.plugins.splice(pluginIdx, 1);
     }
     chartInstance.update('none');
   } else {
@@ -7945,7 +7939,9 @@ function exportChartWithLabels(chartInstance, filename) {
       const link = document.createElement('a');
       link.download = (filename || 'chart') + '.png';
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (err) {
       console.error('Erro ao exportar gráfico:', err);
     }
