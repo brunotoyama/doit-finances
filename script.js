@@ -130,7 +130,7 @@ const CHART_CONFIGS = [
   { id: 'despesas-chart',        type: 'doughnut', title: 'Despesas por Categoria' },
   { id: 'recebimentos-proj',     type: 'bar',      title: 'Recebimentos por Projeto', horizontal: true },
   { id: 'top-clientes',          type: 'bar',      title: 'Top Clientes', horizontal: true },
-  { id: 'tipo-pagamento',        type: 'doughnut', title: 'Distribuição por Tipo de Pagamento' }
+  { id: 'tipo-pagamento',        type: 'bar',      title: 'Distribuição por Tipo de Pagamento', horizontal: true }
 ];
 
 /**
@@ -1912,8 +1912,8 @@ const ChartEngine = {
         label: 'Tipo de Pagamento',
         data: values,
         backgroundColor: colors,
-        borderColor: '#ffffff',
-        borderWidth: 2
+        borderColor: colors,
+        borderWidth: 1
       }]
     };
   },
