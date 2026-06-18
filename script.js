@@ -1405,42 +1405,7 @@ const ChartEngine = {
         options: options
       });
 
-      // Add native click listener for Y-axis labels on horizontal bar charts
-      if (config.horizontal) {
-        const chartRef = this._instances[config.id];
-        const chartIdRef = config.id;
-        const self = this;
-        canvas.addEventListener('click', (e) => {
-          // Use CSS pixel coordinates (not canvas pixel coordinates)
-          const rect = canvas.getBoundingClientRect();
-          const cssX = e.clientX - rect.left;
-          const cssY = e.clientY - rect.top;
-          
-          // Chart.js uses CSS coordinates internally for chartArea
-          // chartArea.left is in CSS pixels relative to the canvas element
-          if (!chartRef.chartArea) return;
-          
-          // Expand click zone: anywhere to the left of the bars (the label area)
-          if (cssX >= chartRef.chartArea.left) return;
-          
-          const yScale = chartRef.scales.y;
-          if (!yScale) return;
-
-          // yScale.getPixelForValue returns CSS pixel position
-          for (let i = 0; i < chartRef.data.labels.length; i++) {
-            const labelY = yScale.getPixelForValue(i);
-            const tickSpacing = (yScale.bottom - yScale.top) / Math.max(chartRef.data.labels.length, 1);
-            if (Math.abs(cssY - labelY) <= tickSpacing / 2) {
-              const fakeElement = { index: i };
-              const filter = self.getFilterFromClick(chartIdRef, fakeElement);
-              if (filter && Object.keys(filter).length > 0) {
-                EventBus.emit('chart:clicked', { chartId: chartIdRef, filter });
-              }
-              break;
-            }
-          }
-        });
-      }
+      // Native label click is handled by the global setup in initChartExportAndFullscreen
     }
   },
 
@@ -8310,6 +8275,42 @@ if (typeof globalThis !== 'undefined') {
  */
 (function initChartExportAndFullscreen() {
   function setup() {
+    // --- Y-axis label click handler for horizontal bar charts ---
+    // Uses event delegation on each horizontal chart canvas
+    const horizontalChartIds = ['recebimentos-proj', 'top-clientes', 'tipo-pagamento'];
+    horizontalChartIds.forEach(chartId => {
+      const canvas = document.getElementById(`chart-${chartId}`);
+      if (!canvas) return;
+      canvas.style.cursor = 'pointer';
+      canvas.addEventListener('click', (e) => {
+        // Get current chart instance (may be re-created after filters)
+        const chart = ChartEngine._instances[chartId];
+        if (!chart || !chart.chartArea || !chart.scales || !chart.scales.y) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Only process if click is in the Y-axis label area (left of chart area)
+        if (x >= chart.chartArea.left) return;
+
+        const yScale = chart.scales.y;
+        const labels = chart.data.labels || [];
+
+        for (let i = 0; i < labels.length; i++) {
+          const labelY = yScale.getPixelForValue(i);
+          const spacing = (yScale.bottom - yScale.top) / Math.max(labels.length, 1);
+          if (Math.abs(y - labelY) <= spacing / 2) {
+            const filter = ChartEngine.getFilterFromClick(chartId, { index: i });
+            if (filter && Object.keys(filter).length > 0) {
+              EventBus.emit('chart:clicked', { chartId, filter });
+            }
+            break;
+          }
+        }
+      });
+    });
+
     // --- Per-chart export buttons ---
     const chartExportButtons = document.querySelectorAll('.btn-chart-export');
     chartExportButtons.forEach(btn => {
