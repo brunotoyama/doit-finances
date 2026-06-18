@@ -1430,6 +1430,38 @@ const ChartEngine = {
         data: chartData,
         options: options
       });
+
+      // Add native click listener for Y-axis labels on horizontal bar charts
+      if (config.horizontal) {
+        const chartRef = this._instances[config.id];
+        const chartIdRef = config.id;
+        const self = this;
+        canvas.addEventListener('click', (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          
+          // Only act if click is in the Y-axis label area
+          if (!chartRef.chartArea || x >= chartRef.chartArea.left) return;
+          
+          const yScale = chartRef.scales.y;
+          if (!yScale) return;
+
+          // Find which label index matches the click Y position
+          for (let i = 0; i < chartRef.data.labels.length; i++) {
+            const labelY = yScale.getPixelForValue(i);
+            const tickSpacing = yScale.height / chartRef.data.labels.length;
+            if (Math.abs(y - labelY) <= tickSpacing / 2) {
+              const fakeElement = { index: i };
+              const filter = self.getFilterFromClick(chartIdRef, fakeElement);
+              if (filter && Object.keys(filter).length > 0) {
+                EventBus.emit('chart:clicked', { chartId: chartIdRef, filter });
+              }
+              break;
+            }
+          }
+        });
+      }
     }
   },
 
