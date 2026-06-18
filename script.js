@@ -1397,32 +1397,6 @@ const ChartEngine = {
           }
           return;
         }
-
-        // For horizontal bar charts, check if click was on a Y-axis label
-        if (config.horizontal && chart.scales && chart.scales.y) {
-          const yScale = chart.scales.y;
-          const nativeEvent = event.native || event;
-          const rect = chart.canvas.getBoundingClientRect();
-          const x = nativeEvent.clientX - rect.left;
-          const y = nativeEvent.clientY - rect.top;
-          
-          // Check if click is in the label area (left of chart area)
-          if (x < chart.chartArea.left + 5) {
-            // Find which label was clicked based on Y position
-            for (let i = 0; i < chart.data.labels.length; i++) {
-              const labelY = yScale.getPixelForValue(i);
-              const tickHeight = yScale.height / chart.data.labels.length;
-              if (Math.abs(y - labelY) < tickHeight / 2) {
-                const fakeElement = { index: i };
-                const filter = this.getFilterFromClick(chartId, fakeElement);
-                if (filter && Object.keys(filter).length > 0) {
-                  EventBus.emit('chart:clicked', { chartId, filter });
-                }
-                return;
-              }
-            }
-          }
-        }
       };
 
       this._instances[config.id] = new Chart(ctx, {
@@ -1437,21 +1411,26 @@ const ChartEngine = {
         const chartIdRef = config.id;
         const self = this;
         canvas.addEventListener('click', (e) => {
+          // Use CSS pixel coordinates (not canvas pixel coordinates)
           const rect = canvas.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
+          const cssX = e.clientX - rect.left;
+          const cssY = e.clientY - rect.top;
           
-          // Only act if click is in the Y-axis label area
-          if (!chartRef.chartArea || x >= chartRef.chartArea.left) return;
+          // Chart.js uses CSS coordinates internally for chartArea
+          // chartArea.left is in CSS pixels relative to the canvas element
+          if (!chartRef.chartArea) return;
+          
+          // Expand click zone: anywhere to the left of the bars (the label area)
+          if (cssX >= chartRef.chartArea.left) return;
           
           const yScale = chartRef.scales.y;
           if (!yScale) return;
 
-          // Find which label index matches the click Y position
+          // yScale.getPixelForValue returns CSS pixel position
           for (let i = 0; i < chartRef.data.labels.length; i++) {
             const labelY = yScale.getPixelForValue(i);
-            const tickSpacing = yScale.height / chartRef.data.labels.length;
-            if (Math.abs(y - labelY) <= tickSpacing / 2) {
+            const tickSpacing = (yScale.bottom - yScale.top) / Math.max(chartRef.data.labels.length, 1);
+            if (Math.abs(cssY - labelY) <= tickSpacing / 2) {
               const fakeElement = { index: i };
               const filter = self.getFilterFromClick(chartIdRef, fakeElement);
               if (filter && Object.keys(filter).length > 0) {
